@@ -51,7 +51,7 @@ private data class AccountSession(val uid: String, val token: String, val refres
 @Serializable
 private data class DeviceSync(val uid: String, val library: SyncedLibrary = SyncedLibrary())
 
-internal data class AftertoneAccess(val allowed: Boolean, val checking: Boolean = false, val message: String? = null)
+internal data class AftertoneAccess(val allowed: Boolean, val message: String? = null)
 
 internal class AftertoneAccount(private val c: AppContainer) {
     val configured = BuildConfig.AFTERTONE_SERVER.isNotBlank()
@@ -63,15 +63,17 @@ internal class AftertoneAccount(private val c: AppContainer) {
     private var session = read(sessionFile, AccountSession.serializer())
     private var baseline = read(syncFile, DeviceSync.serializer())
     private var lastRemote: RemoteLibrary? = null
-    private var lastChecked = 0L
-    private val status = MutableStateFlow(AftertoneAccess(!configured, configured && session != null))
+    private val status = MutableStateFlow(AftertoneAccess(!configured || session != null))
     val access = status.asStateFlow()
 
     init {
-        if (configured) c.scope.launch(Dispatchers.IO) {
-            while (true) {
-                runCatchingSync()
-                delay(20_000)
+        if (configured) {
+            c.network.onReconnect(::syncSoon)
+            c.scope.launch(Dispatchers.IO) {
+                while (true) {
+                    runCatchingSync()
+                    delay(20_000)
+                }
             }
         }
     }
@@ -91,7 +93,6 @@ internal class AftertoneAccount(private val c: AppContainer) {
             persist(sessionFile, AccountSession.serializer(), signedIn)
             session = signedIn
             lastRemote = null
-            lastChecked = System.currentTimeMillis()
             status.value = AftertoneAccess(true)
         }
         syncSoon()
@@ -107,34 +108,25 @@ internal class AftertoneAccount(private val c: AppContainer) {
 
     private suspend fun runCatchingSync() {
         lock.withLock {
-            if (session == null) return
+            if (session == null || !c.network.isOnline()) return
             try {
                 sync()
-                lastChecked = System.currentTimeMillis()
                 status.value = AftertoneAccess(true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RequestFailure) {
                 if (e.code == 401 || e.code == 403) closeSession(e.message)
-                else networkFailure(e.message)
+                else android.util.Log.w("AftertoneAccount", "Library sync unavailable: " + e.code)
             } catch (e: Exception) {
                 android.util.Log.w("AftertoneAccount", "Library sync failed: " + e.javaClass.simpleName)
-                networkFailure("Aftertone couldn’t sync. Check your connection.")
             }
         }
-    }
-
-    private suspend fun networkFailure(message: String?) {
-        val stillAuthorized = lastChecked > 0 && System.currentTimeMillis() - lastChecked < 5 * 60_000
-        status.value = AftertoneAccess(stillAuthorized, checking = false, message = message)
-        if (!stillAuthorized) pause()
     }
 
     private suspend fun closeSession(message: String?) {
         sessionFile.delete()
         session = null
         lastRemote = null
-        lastChecked = 0L
         status.value = AftertoneAccess(false, message = message)
         pause()
     }

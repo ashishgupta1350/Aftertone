@@ -1,6 +1,6 @@
 # Aftertone Web
 
-Sign in with the same ID and password on Android and the web. The server uses Firebase Authentication to check every account and Firebase Realtime Database to keep per-account music libraries. User signups are free in the app and enabled by default. The **Accounts** page is visible to the configured administrator and can disable or re-enable other accounts. Disabling an account revokes its sessions and blocks future playback and sync requests.
+Sign in with the same ID and password on Android and the web. The server uses Firebase Authentication to check every account and Firebase Realtime Database to keep per-account music libraries. User signups are free in the app and enabled by default. The **Accounts** page is visible to the configured administrator and can disable or re-enable other accounts. Disabling an account revokes its sessions and blocks future playback and sync requests. Signed-in Android users can play their downloads offline. The Android app checks account access again when it reconnects.
 
 ## Deploy
 

@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -52,8 +51,7 @@ internal fun AftertoneAccountGate(c: AppContainer, content: @Composable () -> Un
     MaterialTheme {
         Surface(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (access.checking) CircularProgressIndicator()
-                else Column(
+                Column(
                     Modifier.widthIn(max = 430.dp).verticalScroll(rememberScrollState()).padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
