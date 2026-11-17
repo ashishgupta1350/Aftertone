@@ -4,6 +4,8 @@ Aftertone is an Android music app based on [Prism](https://github.com/Yigder/Pri
 
 Build with JDK 17 or later and Android SDK 37 using `./gradlew :app:assembleDebug` (`.\gradlew.bat :app:assembleDebug` on Windows). See [CONTRIBUTING.md](CONTRIBUTING.md) for build variants.
 
+To host the web player and connect the Android app to the same accounts and libraries, follow the [Aftertone Web setup](web/README.md).
+
 Optional cloud backup uses `aftertone.cloud.apiKey` and `aftertone.cloud.databaseUrl` from your local `local.properties`. The example rules in [cloud](cloud/) require your Firebase account UID to replace `REPLACE_WITH_OWNER_UID` before deployment.
 
 ## Upstream Prism project

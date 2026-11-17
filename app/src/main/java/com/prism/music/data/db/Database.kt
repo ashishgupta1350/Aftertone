@@ -325,10 +325,31 @@ data class HistoryRow(
     @androidx.room.Embedded val song: SongEntity,
 )
 
+data class SyncHistoryRow(
+    val playedAt: Long,
+    val playedFor: Long,
+    val excluded: Boolean,
+    @androidx.room.Embedded val song: SongEntity,
+)
+
 @Dao
 interface PlayEventDao {
     @Insert
     suspend fun insert(e: PlayEventEntity)
+
+    @Query(
+        """SELECT e.timestamp AS playedAt, e.playedMs AS playedFor, e.excluded, s.*
+           FROM play_events e JOIN songs s ON s.id = e.songId
+           WHERE length(s.id) = 11 AND s.id NOT GLOB '*[^A-Za-z0-9_-]*'
+           ORDER BY e.timestamp DESC LIMIT :limit"""
+    )
+    suspend fun syncHistory(limit: Int): List<SyncHistoryRow>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM play_events WHERE songId = :songId AND timestamp = :at)")
+    suspend fun hasSynced(songId: String, at: Long): Boolean
+
+    @Query("UPDATE play_events SET playedMs = :ms WHERE songId = :songId AND timestamp = :at AND playedMs < :ms")
+    suspend fun extendSynced(songId: String, at: Long, ms: Long): Int
 
     /** The latest [limit] plays on this phone of at least [minMs], newest first, each with its song (Library → History, #118). */
     @Query(

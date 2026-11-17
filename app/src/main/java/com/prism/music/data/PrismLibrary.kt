@@ -10,7 +10,6 @@ import com.prism.music.data.model.songCount
 import com.prism.music.playback.together.fromPeer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.util.UUID
@@ -189,6 +188,30 @@ class PrismLibrary(private val dir: File) {
     /** Makes the playlist exactly [songs] (a copy brought up to date). */
     fun replace(id: String, songs: List<Song>) = edit(id) { l -> l.copy(songs = songs.distinctBy { it.id }) }
 
+    internal fun applySynced(expected: List<SyncedPlaylist>, incoming: List<SyncedPlaylist>) = change { lib ->
+        val before = expected.associateBy { it.id }
+        val remote = incoming.associateBy { it.id }
+        val present = lib.lists.map { it.id }.toSet()
+        val now = System.currentTimeMillis()
+        val existing = lib.lists.mapNotNull { list ->
+            val old = before[list.id]
+            val current = SyncedPlaylist(list.id, list.title, list.songs.filter { portable(it.id) }.take(3000))
+            if (list.smart != null || old == null || old.content() != current.content()) return@mapNotNull list
+            val next = remote[list.id]
+            if (next == null) {
+                val deviceFiles = list.songs.filterNot { portable(it.id) }
+                return@mapNotNull if (deviceFiles.isEmpty()) null else list.copy(songs = deviceFiles, updatedAt = now)
+            }
+            if (current.content() == next.content()) list else list.copy(
+                title = next.name, songs = next.songs + list.songs.filterNot { portable(it.id) }, updatedAt = now,
+            )
+        }
+        val additions = incoming.filter { it.id !in present && it.id !in before }.map { list ->
+            PrismList(list.id, list.name, songs = list.songs, createdAt = now, updatedAt = now)
+        }
+        if (additions.isEmpty() && existing == lib.lists) lib else lib.copy(lists = additions + existing)
+    }
+
     fun saveAlbum(album: SavedAlbum) = change { it.copy(albums = listOf(album) + it.albums.filterNot { a -> a.id == album.id }) }
     fun unsaveAlbum(id: String) = change { it.copy(albums = it.albums.filterNot { a -> a.id == id }) }
 
@@ -262,7 +285,10 @@ class PrismLibrary(private val dir: File) {
 
     @Synchronized
     private fun change(f: (PrismLibraryFile) -> PrismLibraryFile) {
-        data.update(f)
+        val current = data.value
+        val changed = f(current)
+        if (changed == current) return
+        data.value = changed
         _lists.value = data.value.lists
         _albums.value = data.value.albums
         _playlists.value = data.value.playlists

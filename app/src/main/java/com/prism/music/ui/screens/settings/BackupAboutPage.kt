@@ -160,6 +160,10 @@ internal fun BackupAboutContent(
 
     SettingsPageScaffold(page.title, bottomPadding, showBack = showBack, onSearch = onSearch, find = find, reset = reset.pageReset()) {
         group(tr(R.string.backup)) {
+            if (c.aftertoneAccount.configured) {
+                LinkRow("Sync Aftertone library", action = true) { c.aftertoneAccount.syncSoon() }
+                LinkRow("Sign out of Aftertone", action = true) { scope.launch { c.aftertoneAccount.signOut() } }
+            }
             if (com.prism.music.data.CloudBackup.available) {
                 LinkRow(tr(R.string.cloud_backup), info = tr(R.string.cloud_backup_contents), action = true, onClick = cloudBackup)
             }

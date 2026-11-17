@@ -13,3 +13,10 @@ captures/
 .claude/settings.local.json
 keystore.properties
 CLAUDE.md
+node_modules/
+.env
+.env.*
+firebase-debug.log*
+database-debug.log*
+ui-debug.log*
+*-service-account.json

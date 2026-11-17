@@ -879,6 +879,11 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        if (playWhenReady && !c.aftertoneAccount.access.value.allowed) {
+            player.pause()
+            c.aftertoneAccount.syncSoon()
+            return
+        }
         // #216: the explicit song left current when none that may play came after it stays paused, whatever presses Play.
         if (!playWhenReady || c.queue.followingHost) return
         val song = player.currentMediaItem?.toSong() ?: return

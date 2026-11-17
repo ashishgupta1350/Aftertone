@@ -51,6 +51,12 @@ android {
         }
         buildConfigField("String", "AFTERTONE_CLOUD_API_KEY", '"' + cloudApiKey + '"')
         buildConfigField("String", "AFTERTONE_CLOUD_DATABASE", '"' + cloudDatabase + '"')
+        val aftertoneServer = providers.gradleProperty("aftertoneServer")
+            .orElse(localProps.getProperty("aftertone.serverUrl", "")).get().trimEnd('/')
+        check(aftertoneServer.isEmpty() || aftertoneServer.matches(Regex("https://[A-Za-z0-9.-]+(?::[0-9]+)?"))) {
+            "Aftertone account server must be an HTTPS origin"
+        }
+        buildConfigField("String", "AFTERTONE_SERVER", '"' + aftertoneServer + '"')
         buildConfigField("String", "LASTFM_API_KEY", "\"${localProps.getProperty("lastfm.apiKey", "")}\"")
         // Scrobbling (1.7.8) signs its requests with the API account's shared secret; without one it isn't offered.
         buildConfigField("String", "LASTFM_SECRET", "\"${localProps.getProperty("lastfm.secret", "")}\"")

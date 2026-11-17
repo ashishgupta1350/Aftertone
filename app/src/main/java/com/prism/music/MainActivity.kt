@@ -213,7 +213,7 @@ open class MainActivity : ComponentActivity() {
                 com.prism.music.ui.player.LocalPip provides inPip.value,
                 com.prism.music.ui.theme.LocalWindowLayout provides com.prism.music.ui.theme.rememberWindowLayout(),
             ) {
-                PrismRoot(deepLink)
+                com.prism.music.ui.screens.AftertoneAccountGate(c) { PrismRoot(deepLink) }
             }
         }
         quietGraphicsLayers()

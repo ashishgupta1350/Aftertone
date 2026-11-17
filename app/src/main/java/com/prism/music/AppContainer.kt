@@ -479,6 +479,7 @@ class AppContainer(val app: Application) {
     val models = com.prism.music.data.ModelStore(app, http)
     /** Playlists and saved albums kept on the phone (no account needed). */
     val prismLibrary = com.prism.music.data.PrismLibrary(java.io.File(app.filesDir, "library"))
+    internal val aftertoneAccount by lazy { com.prism.music.data.AftertoneAccount(this) }
     /** The listener's own tags on songs (1.8.3). */
     val tags by lazy { com.prism.music.data.TagStore(db, scope, java.io.File(app.filesDir, "library")) }
     /** Smart playlists' songs (1.8.3): asked for when one opens, never at start. */
