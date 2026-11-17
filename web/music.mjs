@@ -7,8 +7,13 @@ const run = promisify(execFile);
 const cache = new Map();
 const pending = new Map();
 const searches = new Map();
+const unplayable = new Map();
+const selectedAlternates = new Map();
 const runs = (text) => text?.simpleText ?? text?.runs?.map((part) => part.text).join("") ?? "";
 const thumb = (id) => "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
+const seconds = (value) => /^\d+(?::\d{2})+$/.test(value)
+  ? value.split(":").reduce((total, part) => total * 60 + Number(part), 0)
+  : 0;
 
 export async function search(query, music = false) {
   const key = query.toLowerCase() + ":" + music;
@@ -16,12 +21,68 @@ export async function search(query, music = false) {
   const cached = searches.get(key);
   if (cached?.until > now) return cached.promise;
   if (searches.size >= 100) searches.delete(searches.keys().next().value);
-  const promise = searchYouTube(query, music).catch((error) => {
+  const promise = searchTracks(query, music).catch((error) => {
     if (searches.get(key)?.promise === promise) searches.delete(key);
     throw error;
   });
   searches.set(key, { until: now + 10 * 60000, promise });
   return promise;
+}
+
+async function searchTracks(query, music) {
+  const tracks = await searchYouTubeMusic(query).catch(() => []);
+  if (tracks.length) return tracks;
+  const videos = await searchYouTube(query, music);
+  if (!videos.length) throw new ApiError(502, "Music search returned no playable results. Try again in a moment.");
+  return videos;
+}
+
+async function searchYouTubeMusic(query) {
+  const origin = "https://music.youtube.com";
+  const version = "1.20260928.13.00";
+  const response = await fetch(origin + "/youtubei/v1/search?prettyPrint=false", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json", origin, "x-youtube-client-name": "67", "x-youtube-client-version": version,
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+    },
+    body: JSON.stringify({
+      context: { client: { clientName: "WEB_REMIX", clientVersion: version, hl: "en", gl: "IN" } },
+      query, params: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
+    }),
+    signal: AbortSignal.timeout(7500),
+  });
+  if (!response.ok) return [];
+  const result = new Map();
+  function collect(node) {
+    if (!node || typeof node !== "object" || result.size >= 24) return;
+    const row = node.musicResponsiveListItemRenderer;
+    if (row) {
+      const id = row.playlistItemData?.videoId;
+      const [titleColumn, infoColumn] = row.flexColumns ?? [];
+      const title = runs(titleColumn?.musicResponsiveListItemFlexColumnRenderer?.text);
+      if (!isTrackId(id) || !title || result.has(id)) return;
+      const credits = infoColumn?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? [];
+      const artists = [];
+      let album;
+      for (const credit of credits) {
+        const browse = credit.navigationEndpoint?.browseEndpoint;
+        const kind = browse?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
+        if (kind === "MUSIC_PAGE_TYPE_ARTIST" || kind === "MUSIC_PAGE_TYPE_USER_CHANNEL") {
+          artists.push({ name: credit.text, id: browse.browseId });
+        } else if (kind === "MUSIC_PAGE_TYPE_ALBUM") album = { title: credit.text, id: browse.browseId };
+      }
+      const duration = [...credits.map((credit) => credit.text),
+        ...(row.fixedColumns ?? []).map((column) => runs(column.musicResponsiveListItemFixedColumnRenderer?.text))]
+        .map(seconds).find(Boolean);
+      const thumbnail = row.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.at(-1)?.url;
+      result.set(id, track({ id, title, artists, album, durationSec: duration, thumbnail: thumbnail || thumb(id) }));
+      return;
+    }
+    for (const value of Object.values(node)) collect(value);
+  }
+  collect((await response.json()).contents);
+  return [...result.values()];
 }
 
 async function searchYouTube(query, music) {
@@ -37,7 +98,7 @@ async function searchYouTube(query, music) {
     if (!node || typeof node !== "object" || results.size >= 24) return;
     const row = node.videoRenderer;
     if (row && isTrackId(row.videoId) && runs(row.title) && !results.has(row.videoId)) {
-      const duration = runs(row.lengthText).split(":").reduce((seconds, s) => seconds * 60 + Number(s), 0);
+      const duration = seconds(runs(row.lengthText));
       const artist = runs(row.ownerText ?? row.shortBylineText).replace(/\s+- Topic$/, "");
       results.set(row.videoId, track({ id: row.videoId, title: runs(row.title),
         artists: artist ? [{ name: artist }] : [], durationSec: duration, thumbnail: thumb(row.videoId) }));
@@ -135,14 +196,37 @@ async function youtubeAudio(id, range, signal) {
 
 export async function stream(id, range, signal, metadata) {
   if (!/^bytes=\d{1,12}-\d{0,12}$/.test(range)) throw new ApiError(416, "Invalid audio range.");
-  const primary = await youtubeAudio(id, range, signal).catch(() => null);
-  if (primary) return primary;
+  const alternateKey = JSON.stringify([id, metadata?.title, metadata?.artist, metadata?.durationSec]);
+  const cachedAlt = selectedAlternates.get(alternateKey);
+  if (cachedAlt?.until > Date.now()) {
+    const response = await upstreamAudio(cachedAlt.url, range, signal).catch(() => null);
+    const audio = response && audioResponse(response);
+    if (audio) return audio;
+    if (response?.status === 416) {
+      await response.body?.cancel();
+      return new Response(null, { status: 416, headers: { "content-range": response.headers.get("content-range") ?? "bytes */*" } });
+    }
+    await response?.body?.cancel();
+    selectedAlternates.delete(alternateKey);
+  }
+  if (!(unplayable.get(id) > Date.now())) {
+    const primary = await youtubeAudio(id, range, signal).catch(() => null);
+    if (primary) return primary;
+    if (!signal.aborted) {
+      if (unplayable.size >= 128) unplayable.delete(unplayable.keys().next().value);
+      unplayable.set(id, Date.now() + 120000);
+    }
+  }
   if (!signal.aborted && metadata) {
     const source = await matchAlternate(metadata, signal).catch(() => null);
     if (source) {
       const response = await upstreamAudio(source, range, signal);
       const audio = audioResponse(response);
-      if (audio) return audio;
+      if (audio) {
+        if (selectedAlternates.size >= 64) selectedAlternates.delete(selectedAlternates.keys().next().value);
+        selectedAlternates.set(alternateKey, { url: source, until: Date.now() + 15 * 60000 });
+        return audio;
+      }
       await response.body?.cancel();
     }
   }
