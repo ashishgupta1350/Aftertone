@@ -1,5 +1,6 @@
 package com.prism.music.data
 
+import androidx.room.withTransaction
 import com.prism.music.R
 import com.prism.music.tr
 import com.prism.music.AppContainer
@@ -203,12 +204,28 @@ class LibraryRepository(private val c: AppContainer) {
     fun setLiked(many: List<Song>, liked: Boolean) {
         val likable = many.filter { !it.isRss }
         if (likable.isEmpty()) return
-        c.scope.launch(Dispatchers.IO) { likable.forEach { runCatching { likeNow(it, liked) } } }
+        c.scope.launch(Dispatchers.IO) {
+            val now = System.currentTimeMillis()
+            likable.forEachIndexed { index, song -> runCatching { likeNow(song, liked, now - index) } }
+        }
     }
 
-    private suspend fun likeNow(song: Song, liked: Boolean) {
+    /** Reorders the liked tracks shared with this playlist in their existing slots. */
+    suspend fun followPlaylistLikeOrder(playlist: List<Song>): Int = c.db.withTransaction {
+        val liked = songs.liked()
+        val likedIds = liked.map { it.id }.toHashSet()
+        val order = playlist.map { it.id }.distinct().filter { it in likedIds }
+        val shared = order.toHashSet()
+        val slots = liked.filter { it.id in shared }
+        order.zip(slots).forEach { (id, slot) ->
+            if (id != slot.id) songs.setLiked(id, true, slot.likedAt)
+        }
+        order.size
+    }
+
+    private suspend fun likeNow(song: Song, liked: Boolean, at: Long = System.currentTimeMillis()) {
         val existing = songs.get(song.id)
-        songs.upsert(song.toEntity(existing).copy(liked = liked, likedAt = if (liked) System.currentTimeMillis() else 0))
+        songs.upsert(song.toEntity(existing).copy(liked = liked, likedAt = if (liked) at else 0))
         // "Love on Last.fm when I like a song" (#133), local files included.
         c.lastFm.liked(song, liked)
         // A file on the phone is liked in Prism only: there's nothing to download or tell YouTube.

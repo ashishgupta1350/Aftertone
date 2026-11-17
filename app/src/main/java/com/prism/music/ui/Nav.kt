@@ -74,6 +74,9 @@ object Routes {
     fun settings(section: String, find: String? = null) = "settings/$section" + (find?.let { "?find=${Uri.encode(it)}" } ?: "")
     fun album(id: String) = "album/${Uri.encode(id)}"
     fun playlist(id: String) = "playlist/${Uri.encode(id)}"
+    fun discovery(tab: String = "new", spotify: String? = null) =
+        "discovery?tab=${Uri.encode(tab)}" + (spotify?.let { "&spotify=${Uri.encode(it)}" } ?: "")
+    fun playlistSuggestions(id: String) = "playlist-suggestions/${Uri.encode(id)}"
     /** A folder of playlists in Library (1.7.6). */
     fun folder(id: String) = "folder/${Uri.encode(id)}"
     /** One of the listener's tags (1.8.3), by its name. */

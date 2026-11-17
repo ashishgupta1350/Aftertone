@@ -32,11 +32,30 @@ object TakeoutHistory {
      * what's inside: [entry] only takes YouTube Music plays of a video, with their time. Searches, subscriptions and the
      * rest give none. The English name counts as a history even with no music in it, as it always has.
      */
-    fun read(name: String, input: InputStream, onPlay: (ParsedPlay) -> Unit): Boolean {
+    fun read(name: String, input: InputStream, onPlay: (ParsedPlay) -> Unit): Boolean =
+        scan(name, input, onPlay, null)
+
+    fun readExport(name: String, input: InputStream, onPlay: ((ParsedPlay) -> Unit)?): Pair<Boolean, ParsedLibrary> {
+        var library = ParsedLibrary()
+        val hasHistory = scan(name, input, onPlay) { library += it }
+        return hasHistory to library
+    }
+
+    private fun scan(
+        name: String,
+        input: InputStream,
+        onPlay: ((ParsedPlay) -> Unit)?,
+        onLibrary: ((ParsedLibrary) -> Unit)?,
+    ): Boolean {
         var found = false
         // A Takeout with My Activity in it too lists the same plays there: each counts once, whichever file it's in.
         val seen = HashSet<Long>()
         ImportFiles.forEachFile(name, input) { file, stream ->
+            if (file.endsWith(".csv", ignoreCase = true) || file.equals("likes.json", ignoreCase = true)) {
+                onLibrary?.invoke(TakeoutLibrary.readFile(file, stream))
+                return@forEachFile
+            }
+            if (onPlay == null) return@forEachFile
             if (!file.endsWith(".json", ignoreCase = true)) return@forEachFile
             if (isHistoryFile(file)) found = true
             var later: Long? = null

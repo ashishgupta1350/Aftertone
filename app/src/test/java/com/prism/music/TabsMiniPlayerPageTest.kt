@@ -149,10 +149,10 @@ class TabsMiniPlayerPageTest : TextTabsPageHarness(SettingsPageId.TABS_MINI_PLAY
     /** nav_tabs, tab_names, start_tab: the tabs' list works as it did (tick, move, rename), with "Open Prism on" under it. */
     @Test fun theTabsListStillTicksMovesAndRenames() {
         show()
-        assertEquals(listOf(NavTab.HOME, NavTab.LIBRARY, NavTab.SEARCH, NavTab.REPLAY), stored.navTabs)
+        assertEquals(listOf(NavTab.HOME, NavTab.LIBRARY, NavTab.SEARCH, NavTab.REPLAY, NavTab.EXPLORE), stored.navTabs)
         // Tick one more tab (the checkbox is named after its tab).
         compose.onNode(hasContentDescription("Downloads") and androidx.compose.ui.test.isToggleable()).performClick()
-        await("nav_tabs: one more") { stored.navTabs.last() == NavTab.DOWNLOADS && stored.navTabs.size == 5 }
+        await("nav_tabs: one more") { stored.navTabs.last() == NavTab.DOWNLOADS && stored.navTabs.size == 6 }
         // Move the first one down (1.8.4 §2.8: the row's arrows went; its grip's TalkBack move does it).
         compose.reorderAction(tr(R.string.drag, NavTab.HOME.label), tr(R.string.move_down))
         await("nav_tabs: moved") { stored.navTabs.take(2) == listOf(NavTab.LIBRARY, NavTab.HOME) }

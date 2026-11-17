@@ -43,6 +43,14 @@ android {
         val localProps = Properties().apply {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
         }
+        val cloudApiKey = localProps.getProperty("aftertone.cloud.apiKey", "")
+        val cloudDatabase = localProps.getProperty("aftertone.cloud.databaseUrl", "")
+        check(cloudApiKey.matches(Regex("[A-Za-z0-9_-]*"))) { "Invalid Aftertone Firebase API key" }
+        check(cloudDatabase.isEmpty() || cloudDatabase.matches(Regex("https://[a-z0-9.-]+"))) {
+            "Invalid Aftertone database URL"
+        }
+        buildConfigField("String", "AFTERTONE_CLOUD_API_KEY", '"' + cloudApiKey + '"')
+        buildConfigField("String", "AFTERTONE_CLOUD_DATABASE", '"' + cloudDatabase + '"')
         buildConfigField("String", "LASTFM_API_KEY", "\"${localProps.getProperty("lastfm.apiKey", "")}\"")
         // Scrobbling (1.7.8) signs its requests with the API account's shared secret; without one it isn't offered.
         buildConfigField("String", "LASTFM_SECRET", "\"${localProps.getProperty("lastfm.secret", "")}\"")

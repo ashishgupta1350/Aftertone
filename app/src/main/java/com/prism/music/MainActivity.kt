@@ -340,7 +340,9 @@ open class MainActivity : ComponentActivity() {
     }
 
     private fun linkOf(intent: Intent?): Uri? = when (intent?.action) {
-        Intent.ACTION_SEND -> com.prism.music.data.ShareLinks.findIn(intent.getStringExtra(Intent.EXTRA_TEXT))?.let(Uri::parse).also {
+        Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT).let { text ->
+            com.prism.music.data.spotify.PublicSpotifyPlaylists.linkIn(text) ?: com.prism.music.data.ShareLinks.findIn(text)
+        }?.let(Uri::parse).also {
             if (it == null) Toast.makeText(this, tr(R.string.that_isn_t_a_youtube_or), Toast.LENGTH_SHORT).show()
         }
         else -> intent?.data
@@ -362,6 +364,7 @@ private fun NavTab.tab(name: String? = null): Tab {
         NavTab.DOWNLOADS -> Tab(Routes.DOWNLOADS, label, PrismIcons.Download, PrismIcons.DownloadDone)
         NavTab.LIKED -> Tab(Routes.liked(), label, PrismIcons.Heart, PrismIcons.HeartFilled)
         NavTab.PODCASTS -> Tab(Routes.PODCASTS, label, PrismIcons.Podcasts, PrismIcons.Podcasts)
+        NavTab.EXPLORE -> Tab(Routes.EXPLORE, label, PrismIcons.Globe, PrismIcons.Globe)
     }
 }
 
@@ -746,6 +749,24 @@ private fun PrismRoot(deepLink: MutableStateFlow<Uri?>) {
                         composable(Routes.MOODS) { ScreenBackdrop(BackdropScreen.SEARCH) { com.prism.music.ui.screens.MoodsScreen(bottomPadding) } }
                         composable(Routes.EXPLORE) { ScreenBackdrop(BackdropScreen.SEARCH) { com.prism.music.ui.screens.ExploreScreen(bottomPadding) } }
                         composable(Routes.IMPORT) { ScreenBackdrop(BackdropScreen.LIBRARY) { com.prism.music.ui.screens.ImportScreen(bottomPadding) } }
+                        composable(
+                            "discovery?tab={tab}&spotify={spotify}",
+                            listOf(
+                                navArgument("tab") { type = NavType.StringType; defaultValue = "new" },
+                                navArgument("spotify") { type = NavType.StringType; nullable = true; defaultValue = null },
+                            ),
+                        ) {
+                            ScreenBackdrop(BackdropScreen.HOME) {
+                                com.prism.music.ui.screens.DiscoveryScreen(
+                                    it.arguments?.getString("tab") ?: "new", it.arguments?.getString("spotify"), bottomPadding,
+                                )
+                            }
+                        }
+                        composable("playlist-suggestions/{id}", listOf(navArgument("id") { type = NavType.StringType })) {
+                            ScreenBackdrop(BackdropScreen.LIBRARY) {
+                                com.prism.music.ui.screens.PlaylistSuggestionsScreen(it.arguments?.getString("id").orEmpty(), bottomPadding)
+                            }
+                        }
                         composable(Routes.DESIGN_GALLERY) { ScreenBackdrop(BackdropScreen.SETTINGS) { com.prism.music.ui.components.DesignGallery(bottomPadding) } }
                         composable(Routes.TOGETHER) { ScreenBackdrop(BackdropScreen.LIBRARY) { com.prism.music.ui.screens.TogetherScreen(bottomPadding) } }
                         composable(Routes.PODCASTS) { ScreenBackdrop(BackdropScreen.LIBRARY) { com.prism.music.ui.screens.PodcastsScreen(bottomPadding) } }
@@ -1277,6 +1298,10 @@ private fun MinimalTab(tab: Tab, selected: Boolean, height: Dp = 44.dp, onClick:
 
 /** Opens music.youtube.com links shared into the app. */
 private fun handleDeepLink(uri: Uri, nav: Navigator, c: AppContainer) {
+    com.prism.music.data.spotify.PublicSpotifyPlaylists.linkIn(uri.toString())?.let { link ->
+        nav.go(Routes.discovery("playlists", link))
+        return
+    }
     val v = uri.getQueryParameter("v")
     val list = uri.getQueryParameter("list")
     val path = uri.pathSegments

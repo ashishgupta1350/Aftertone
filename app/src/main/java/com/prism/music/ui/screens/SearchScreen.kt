@@ -309,6 +309,10 @@ fun SearchScreen(bottomPadding: Dp) {
         }
 
         if (query.isBlank()) {
+            Row(Modifier.padding(start = 16.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.prism.music.ui.components.PrismChip(false, { focus.clearFocus(); nav.go(com.prism.music.ui.Routes.discovery()) }, tr(R.string.discovery_fresh))
+                com.prism.music.ui.components.PrismChip(false, { focus.clearFocus(); nav.go(com.prism.music.ui.Routes.discovery("playlists")) }, tr(R.string.discovery_find_playlists))
+            }
             SearchLanding(
                 recents, moods, bottomPadding, opened,
                 onPick = { submit(it) },

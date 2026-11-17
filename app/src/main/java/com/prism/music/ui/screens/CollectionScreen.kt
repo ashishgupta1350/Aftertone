@@ -1035,6 +1035,21 @@ internal fun CollectionContent(type: CollectionType, live: LiveCollection, initi
                     })
                 } else if ((type == CollectionType.PLAYLIST && live.page.owned) || type == CollectionType.PRISM) add(SheetItem(PrismIcons.Edit, tr(R.string.edit_details)) { editing = true })
                 if (canRearrange) add(SheetItem(PrismIcons.SwapVertical, tr(R.string.rearrange_songs)) { startRearranging() })
+                if (type == CollectionType.PRISM && smartRules == null) {
+                    add(SheetItem(PrismIcons.PlaylistAdd, tr(R.string.discovery_playlist_suggestions)) {
+                        nav.go(Routes.playlistSuggestions(page.id))
+                    })
+                }
+                if (type == CollectionType.PRISM && smartRules == null && songs.count { c.library.isLiked(it.id) } > 1) {
+                    add(SheetItem(PrismIcons.Sort, tr(R.string.follow_playlist_like_order)) {
+                        scope.launch {
+                            val count = c.library.followPlaylistLikeOrder(songs)
+                            c.library.setSort("liked", null)
+                            c.library.setSort("liked:genre", null)
+                            Toast.makeText(context, tr(R.string.follow_playlist_like_order_done, count), Toast.LENGTH_SHORT).show()
+                        }
+                    })
+                }
                 // A sleep or kids' playlist: plays as usual, but doesn't shape recommendations.
                 if (type == CollectionType.PLAYLIST) {
                     val listId = page.playlistId ?: page.id.removePrefix("VL")

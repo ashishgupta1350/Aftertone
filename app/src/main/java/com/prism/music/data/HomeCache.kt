@@ -51,24 +51,26 @@ class HomeCache(dir: File) {
      * #371: the Quick picks made today for [account], so the next start today shows them at once: making them means
      * waiting on Home and three radios (about 5 s on the reporter's video). Null on another day, or for another account.
      */
-    suspend fun readPicks(day: String, account: String): List<Song>? = withContext(Dispatchers.IO) {
+    suspend fun readPicks(day: String, account: String): List<Song>? = readDiscovery(day, account)?.songs
+
+    internal suspend fun readDiscovery(day: String, account: String): KeptPicks? = withContext(Dispatchers.IO) {
         if (!picksFile.exists()) return@withContext null
         runCatching { InnerTube.json.decodeFromString(KeptPicks.serializer(), picksFile.readText()) }
             .onFailure { Log.w(TAG, "couldn't read the kept Quick picks", it) }.getOrNull()
-            ?.takeIf { it.day == day && it.account == account }?.songs?.takeIf { it.isNotEmpty() }
+            ?.takeIf { it.day == day && it.account == account && it.songs.isNotEmpty() }
     }
 
-    suspend fun writePicks(day: String, account: String, songs: List<Song>) = withContext(Dispatchers.IO) {
+    suspend fun writePicks(day: String, account: String, songs: List<Song>, discoveries: List<Song> = emptyList()) = withContext(Dispatchers.IO) {
         runCatching {
             picksFile.parentFile?.mkdirs()
             val next = File(picksFile.parentFile, "picks.json.new")
-            next.writeText(InnerTube.json.encodeToString(KeptPicks.serializer(), KeptPicks(day, account, songs)))
+            next.writeText(InnerTube.json.encodeToString(KeptPicks.serializer(), KeptPicks(day, account, songs, discoveries)))
             if (!next.renameTo(picksFile)) { picksFile.delete(); next.renameTo(picksFile) }
         }.onFailure { Log.w(TAG, "couldn't keep Quick picks", it) }
     }
 
     @kotlinx.serialization.Serializable
-    private data class KeptPicks(val day: String, val account: String, val songs: List<Song>)
+    internal data class KeptPicks(val day: String, val account: String, val songs: List<Song>, val discoveries: List<Song> = emptyList())
 
     private companion object {
         const val TAG = "PrismHome"

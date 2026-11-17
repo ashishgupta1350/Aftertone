@@ -47,6 +47,8 @@ import com.prism.music.data.db.PlayEventEntity
 import com.prism.music.data.db.toEntity
 import com.prism.music.data.innertube.InnerTube
 import com.prism.music.data.model.Song
+import com.prism.music.data.stream.AlternateAudio
+import com.prism.music.data.stream.anonymousYouTubeBlocked
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,6 +106,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private val normalizer = NormalizerProcessor()
     private var songLoudness: Float? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val alternateAudio by lazy { AlternateAudio(c.http) }
+    private var alternateLookup: Job? = null
 
     private val likeCommand = SessionCommand("prism.LIKE", Bundle.EMPTY)
     private val shuffleCommand = SessionCommand("prism.SHUFFLE", Bundle.EMPTY)
@@ -603,6 +607,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             scheduleSave()
             return
         }
+        alternateLookup?.cancel()
         // Next pressed (or a song picked) before this one had its say: a skip, for recommendations' sake.
         flushPlayTime(skipped = reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK)
         applyLiveVideo()
@@ -989,7 +994,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     }
 
     override fun onPlayerError(error: PlaybackException) {
-        val id = player.currentMediaItem?.mediaId ?: return
+        val item = player.currentMediaItem ?: return
+        val id = item.mediaId
         // The next song couldn't be had, found as the playing one's last sound is read: the player reports that as the
         // playing song's failure, which would then have its music video looked up and be retried for what isn't its fault.
         // On to the song it's about, whose failure this then is.
@@ -1145,6 +1151,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             }
             return
         }
+        if (item.localConfiguration?.customCacheKey?.startsWith(AlternateAudio.CACHE_PREFIX) == true) {
+            failAndSkip(error)
+            return
+        }
         if (attempts < 2 && (httpCode == 403 || httpCode == 410 || error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
                 error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
         ) {
@@ -1156,9 +1166,42 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             player.play()
             return
         }
-        // #93: a song YouTube won't play where the listener is, though its music video plays there: the video's sound
-        // takes its place (the song stays the song: its lyrics, likes and history are its own).
-        val song = player.currentMediaItem?.toSong()
+        val song = item.toSong()
+        val blocked = anonymousYouTubeBlocked(error)
+        if (song != null && !song.isVideo && !song.isLocal && !song.isLive && !song.isEpisode && !song.isUpload &&
+            item.localConfiguration?.uri?.scheme == "prism" && c.versions.of(id) == null &&
+            (blocked || wontPlayHere(error, refused = httpCode in setOf(403, 410, 429)))
+        ) {
+            val index = player.currentMediaItemIndex
+            val position = player.currentPosition
+            alternateLookup?.cancel()
+            alternateLookup = scope.launch {
+                val stream = alternateAudio.find(song)
+                if (player.playbackState != Player.STATE_IDLE || player.currentMediaItemIndex != index ||
+                    player.currentMediaItem !== item
+                ) return@launch
+                if (stream == null) {
+                    if (blocked) failAndSkip(error, tr(R.string.alternate_audio_not_found))
+                    else recoverWithMusicVideo(song, error, httpCode)
+                    return@launch
+                }
+                val replacement = item.buildUpon().setUri(stream.url.toString()).setCustomCacheKey(stream.cacheKey).build()
+                c.streamDetails[id] = stream.source to null
+                applyStreamStats(id)
+                android.util.Log.i("PrismStream", "$id switched to ${stream.source} after YouTube refused playback")
+                AudioDiagnostics.log("song", "$id: playing from ${stream.source}")
+                swapInPlace(index, replacement)
+                player.seekTo(index, position)
+                player.prepare()
+            }
+            return
+        }
+        recoverWithMusicVideo(song, error, httpCode)
+    }
+
+    private fun recoverWithMusicVideo(song: Song?, error: PlaybackException, httpCode: Int?) {
+        val id = player.currentMediaItem?.mediaId ?: return
+        // #93: the sound of an equally long music video can stand in for the song.
         // Reddit R2: also a song whose stream YouTube keeps refusing ("BUZZ" skipped while its video played), since the
         // video has to be the song's length (below), so it's the same recording.
         if (song != null && !song.isVideo && !song.isLocal && !song.isLive && !song.isEpisode && !c.soundFrom.containsKey(id) && wontPlayHere(error, refused = httpCode == 403)) {
@@ -1204,14 +1247,15 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
      * YouTube's "Video unavailable"). With nothing queued after it, Autoplay's songs are waited for; with none of those
      * either it says so and stops. If the listener has gone somewhere else meanwhile, that stands.
      */
-    private fun failAndSkip(error: PlaybackException) {
+    private fun failAndSkip(error: PlaybackException, message: String? = null) {
         val index = player.currentMediaItemIndex
         val item = player.currentMediaItem
         val id = item?.mediaId
         val song = item?.toSong()
         val title = song?.title.orEmpty()
         val cause = error.cause ?: error
-        val why = (com.prism.music.data.podcast.episodeFailureText(song, error) ?: cause.friendlyMessage(tr(R.string.playback_failed))).trimEnd('.', ' ')
+        val why = (message ?: com.prism.music.data.podcast.episodeFailureText(song, error)
+            ?: cause.friendlyMessage(tr(R.string.playback_failed))).trimEnd('.', ' ')
         AudioDiagnostics.log("error", "$id won't play (${error.errorCodeName}: ${cause.message?.take(120)})")
         fun stillThere() = player.playbackState == Player.STATE_IDLE && player.currentMediaItemIndex == index && player.currentMediaItem?.mediaId == id
         skipJob?.cancel()

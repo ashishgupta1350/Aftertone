@@ -3,12 +3,14 @@ package com.prism.music.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -24,6 +26,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.prism.music.R
@@ -33,6 +37,7 @@ import com.prism.music.data.model.BrowseItem
 import com.prism.music.data.model.MoodItem
 import com.prism.music.data.model.Shelf
 import com.prism.music.data.model.SongItem
+import com.prism.music.data.prefs.NavTab
 import com.prism.music.playback.QueueKind
 import com.prism.music.playback.QueueSource
 import com.prism.music.tr
@@ -47,8 +52,11 @@ import com.prism.music.ui.components.PrismSheet
 import com.prism.music.ui.components.SectionHeader
 import com.prism.music.ui.components.SongRow
 import com.prism.music.ui.components.SubPage
+import com.prism.music.ui.components.pane
 import com.prism.music.ui.rememberLoad
 import com.prism.music.ui.theme.LocalContainer
+import com.prism.music.ui.theme.LocalAppSettings
+import com.prism.music.ui.theme.LocalUi
 import com.prism.music.ui.theme.PrismIcons
 
 /** How many mood and genre tiles the page shows before "See all". */
@@ -71,7 +79,11 @@ fun ExploreScreen(bottomPadding: Dp) {
     val open: (BrowseItem) -> Unit = { item -> nav.open(item) { c.player.playSingle(it.song) } }
     val failedBoth = explore.state is Load.Err && charts.state is Load.Err
 
-    SubPage(tr(R.string.explore), bottomPadding, Modifier.testTag("explore")) {
+    SubPage(
+        tr(R.string.explore), bottomPadding, Modifier.testTag("explore"),
+        showBack = NavTab.EXPLORE !in LocalAppSettings.current.navTabs,
+    ) {
+        item("exploreShortcuts") { ExploreShortcuts(full = true) }
         if (failedBoth) {
             item("failed") { ErrorState((charts.state as Load.Err).message) { charts.reload(false); explore.reload(false) } }
             return@SubPage
@@ -106,6 +118,39 @@ fun ExploreScreen(bottomPadding: Dp) {
     if (picking) {
         val page = (charts.state as? Load.Ok)?.value
         CountrySheet(page?.countries.orEmpty(), page?.selected?.code, onDismiss = { picking = false }) { country = it.code; picking = false }
+    }
+}
+
+private data class ExploreShortcut(val title: Int, val icon: ImageVector, val route: String)
+
+@Composable
+internal fun ExploreShortcuts(full: Boolean = false) {
+    val nav = LocalNavigator.current
+    val shape = LocalUi.current.shape(14.dp)
+    val shortcuts = listOf(
+        ExploreShortcut(R.string.discovery_fresh, PrismIcons.TrendingUp, Routes.discovery()),
+        ExploreShortcut(R.string.discovery_find_playlists, PrismIcons.Search, Routes.discovery("playlists")),
+        ExploreShortcut(R.string.discovery_radio, PrismIcons.Radio, Routes.discovery("radio")),
+        ExploreShortcut(R.string.moods_genres, PrismIcons.Globe, Routes.MOODS),
+        ExploreShortcut(R.string.discovery_prompt, PrismIcons.SmartShuffle, Routes.discovery("mix")),
+        ExploreShortcut(R.string.discovery_samples, PrismIcons.Video, Routes.discovery("samples")),
+    )
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        (if (full) shortcuts else shortcuts.take(4)).chunked(2).forEach { pair ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { shortcut ->
+                    Row(
+                        Modifier.weight(1f).heightIn(min = 52.dp).pane(shape)
+                            .clickable { nav.go(shortcut.route) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(shortcut.icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(tr(shortcut.title), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -27,6 +27,32 @@ import java.util.zip.ZipOutputStream
 class ImportParsersTest {
     private fun res(name: String) = javaClass.getResourceAsStream("/imports/$name")!!.readBytes()
 
+    @Test fun takeoutArchiveReadsLikesAndPlaylistsById() {
+        val archive = ByteArrayOutputStream()
+        ZipOutputStream(archive).use { zip ->
+            val root = "Takeout/YouTube and YouTube Music"
+            fun add(name: String, contents: String) {
+                zip.putNextEntry(ZipEntry("$root/$name"))
+                zip.write(contents.toByteArray())
+                zip.closeEntry()
+            }
+            add("playlists/Liked videos.csv", "\uFEFFVideo ID,Playlist video creation timestamp\r\nHseq19rJbZE,2026-02-12\r\n")
+            add("playlists/likes.json", """[{"snippet":{"title":"Paintress"},"contentDetails":{"videoId":"pkSj4cWO12s"}}]""")
+            add("playlists/Evening-videos.csv", "Video ID,Playlist Video Creation Timestamp\nT0rgFnbZujM,2026-02-12\nHseq19rJbZE,2026-02-12\nT0rgFnbZujM,2026-02-12\n")
+            add("music (library and uploads)/Music Library Songs.csv", "Video Id,Song Title,Album Title,Artist Name\nT0rgFnbZujM,\"One, \"\"Two\"\"\",Album,\"Artist\nName\"\n")
+            add("comments/comments.csv", "Video ID,Comment Text\nJGwWNGJdvx8,Hello")
+        }
+        val (history, library) = TakeoutHistory.readExport("takeout.zip", archive.toByteArray().inputStream(), null)
+        assertFalse(history)
+        assertEquals(listOf("yt:Hseq19rJbZE", "yt:pkSj4cWO12s"), library.liked.map { it.key })
+        assertEquals("Paintress", library.liked.last().title)
+        assertEquals(listOf("Evening", "Music Library Songs"), library.playlists.map { it.name })
+        assertEquals(listOf("T0rgFnbZujM", "Hseq19rJbZE"), library.playlists.first().tracks.map { it.youtubeId })
+        val track = library.playlists.last().tracks.single()
+        assertEquals("One, \"Two\"", track.title)
+        assertEquals("Artist\nName", track.artist)
+    }
+
     private fun spotify(name: String, bytes: ByteArray = res(name), options: SpotifyExport.Options = SpotifyExport.Options()): Pair<List<ParsedPlay>, SpotifyExport.Result> {
         val plays = ArrayList<ParsedPlay>()
         val r = SpotifyExport.read(name, ByteArrayInputStream(bytes), options) { plays += it }

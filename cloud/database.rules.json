@@ -1,0 +1,22 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "backups": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && $uid === 'REPLACE_WITH_OWNER_UID'",
+        ".write": "auth != null && auth.uid === $uid && $uid === 'REPLACE_WITH_OWNER_UID'",
+        ".validate": "newData.hasChildren(['archive', 'savedAt'])",
+        "archive": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 10000000"
+        },
+        "savedAt": {
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

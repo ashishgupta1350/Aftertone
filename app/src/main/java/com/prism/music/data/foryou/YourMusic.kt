@@ -5,6 +5,7 @@ import com.prism.music.tr
 import com.prism.music.AppContainer
 import com.prism.music.data.db.PlayEventEntity
 import com.prism.music.data.model.Song
+import com.prism.music.data.model.Related
 import com.prism.music.download.PlayLikelihood
 import com.prism.music.playback.MusicKey
 import kotlinx.coroutines.Dispatchers
@@ -185,61 +186,133 @@ class YourMusic(private val c: AppContainer) {
     }
 
     /**
-     * Quick picks made around the artists the listener plays: favourites by their top artists they haven't played for
-     * a few days, new songs from radios of their top three artists ([radioOf], none they've played), and [youtube]'s own
-     * picks when they're by artists the listener plays; taken in turn (two favourites, two new, one of YouTube's), no
-     * artist twice running and three at most. With too little history to go on, [youtube] as it is.
+     * Quick picks mix favourites with unheard songs from artist radios and related tracks. Personal picks reserve a seed
+     * for English music when it has support in the listener's library and rotate another seed through less-played artists.
      *
      * [draw]: which draw of the day (each pull to refresh is another, #371: every draw used to be the day's one, so a
      * refresh gave the same songs back). [shown] is the set being replaced, kept out where there are others to take.
      */
     suspend fun quickPicks(
         youtube: List<Song>, radioOf: suspend (Song) -> List<Song>, count: Int = 20, draw: Int = 0, shown: Set<String> = emptySet(),
+        libraryLikes: List<Song>? = null, playlistSongs: List<Song> = emptyList(),
+        relatedTo: (suspend (Song) -> Related)? = null,
+        discoveriesOnly: Boolean = false,
+        onDiscoveries: ((List<Song>) -> Unit)? = null,
     ): List<Song> {
         val s = snapshot()
         val now = System.currentTimeMillis()
         val recent = s.events.filter { now - it.timestamp < 90 * DAY }
-        if (recent.size < MIN_PICK_HISTORY) return youtube
-        // How much the listener plays each main artist: newer plays count more (halving every 30 days), likes add.
+        val personalOnly = libraryLikes != null
+        val likes = (libraryLikes ?: s.liked).filter(::ok)
+        val playlist = playlistSongs.distinctBy { it.id }.filter(::ok)
+        if (!personalOnly && recent.size < MIN_PICK_HISTORY) return youtube
+        // Recent plays count more. A repeat or a track saved in several places has limited extra influence.
         val aff = HashMap<String, Double>()
-        for (e in recent) {
-            val a = s.songs[e.songId]?.primaryArtist?.lowercase().orEmpty()
-            if (a.isNotBlank()) aff[a] = (aff[a] ?: 0.0) + Math.pow(0.5, (now - e.timestamp) / (30.0 * DAY))
+        for ((id, plays) in recent.groupBy { it.songId }) {
+            val a = s.songs[id]?.takeIf(::ok)?.primaryArtist?.lowercase().orEmpty()
+            val weight = plays.sumOf { Math.pow(0.5, (now - it.timestamp) / (30.0 * DAY)) }
+            if (a.isNotBlank()) aff[a] = (aff[a] ?: 0.0) + kotlin.math.ln1p(weight)
         }
-        s.liked.forEach { val a = it.primaryArtist.lowercase(); if (a.isNotBlank()) aff[a] = (aff[a] ?: 0.0) + 0.5 }
-        val top = aff.values.maxOrNull()?.takeIf { it > 0 } ?: return youtube
+        val likedIds = likes.mapTo(hashSetOf()) { it.id }
+        likes.forEach { val a = it.primaryArtist.lowercase(); if (a.isNotBlank()) aff[a] = (aff[a] ?: 0.0) + 1.0 }
+        playlist.filterNot { it.id in likedIds }.forEach { val a = it.primaryArtist.lowercase(); if (a.isNotBlank()) aff[a] = (aff[a] ?: 0.0) + 0.8 }
+        val top = aff.values.maxOrNull()?.takeIf { it > 0 } ?: return if (personalOnly) emptyList() else youtube
         fun affinity(song: Song) = song.artists.maxOfOrNull { (aff[it.name.lowercase()] ?: 0.0) / top } ?: 0.0
         val heardToday = s.events.filter { now - it.timestamp < DAY }.map { it.songId }.toSet()
         val heardSongs = heardToday.mapNotNull { s.songs[it] }.map { LocalRadio.sameSong(it) }.toSet()
-        fun fresh(song: Song) = ok(song) && !song.isVideo && song.id !in heardToday && LocalRadio.sameSong(song) !in heardSongs
+        fun fresh(song: Song) = ok(song) && (personalOnly || !song.isVideo) && song.id !in heardToday && LocalRadio.sameSong(song) !in heardSongs
         val day = LocalDate.now().toString()
         fun j(id: String) = 0.85 + 0.3 * (((id + day + draw).hashCode().toLong() and 0xffff) / 65535.0)
         fun seed(salt: String) = drawSeed(day, salt, draw)
 
-        val last = s.events.groupBy { it.songId }.mapValues { (_, e) -> e.maxOf { it.timestamp } }
-        val favourites = s.songs.values
-            .filter { fresh(it) && (last[it.id] ?: 0) < now - 3 * DAY && affinity(it) > 0.15 && (it.durationSec == 0 || it.durationSec >= 60) }
-            .distinctBy { LocalRadio.sameSong(it) }
-            // Drawn by weighted chance, the day's own draw, so the same favourites don't head Quick picks every day.
-            .let { all -> Variety.sample(all, count * if (shown.isEmpty()) 1 else 2, seed("picks"), sharpness = 1.5) { s.model.score(it) * rest(s, it.id) } }
-        // New songs from the radios of three of the listener's eight main artists, a different three most days, each from one of their songs drawn by liking.
-        val topArtists = Variety.sample(aff.entries.sortedByDescending { it.value }.take(8), 3, seed("pick-artists")) { it.value }.map { it.key }
-        val seeds = topArtists.mapNotNull { a ->
-            Variety.sample(s.songs.values.filter { it.primaryArtist.equals(a, true) && !it.isVideo && !it.isLocal }, 1, seed("seed:$a"), sharpness = 2.0) { s.model.score(it) }.firstOrNull()
+        val library = (likes + playlist).distinctBy { it.id }
+        val libraryIds = library.map { it.id }.toSet()
+        val known = (library + s.songs.values.sortedBy { it.id }).distinctBy { it.id }
+        val english = EnglishSongHints(library)
+        fun libraryWeight(song: Song) = s.model.score(song) + if (song.id in libraryIds) 1.0 else 0.0
+        val favouritePool = known
+            .filter { fresh(it) && (s.last[it.id] ?: 0) < now - 3 * DAY &&
+                (it.id in libraryIds || affinity(it) > 0.15) && (it.durationSec == 0 || it.durationSec >= 60) }
+            .distinctBy(LocalRadio::sameSong)
+        val sampleSize = count * if (shown.isEmpty()) 1 else 2
+        val rankedFavourites = Variety.sample(favouritePool, sampleSize, seed("picks"), sharpness = 1.25) { libraryWeight(it) * rest(s, it.id) }
+        val englishFavourites = if (personalOnly) Variety.sample(
+            favouritePool.filter(english::matches), sampleSize, seed("english-favourites"),
+        ) { libraryWeight(it) * rest(s, it.id) } else emptyList()
+        val favourites = withRegularPicks(rankedFavourites, Variety.roundRobin(englishFavourites) { it.primaryArtist }, every = 3, firstAt = 1)
+        val candidatesByArtist = known.filter { ok(it) && !it.isLocal && !it.isUpload && (personalOnly || !it.isVideo) }
+            .groupBy { it.primaryArtist.lowercase() }.filterKeys { it in aff }
+        val artists = candidatesByArtist.keys.sortedWith(compareByDescending<String> { aff.getValue(it) }.thenBy { it })
+        fun artistWeight(artist: String) = kotlin.math.sqrt(aff.getValue(artist))
+        val englishArtist = if (personalOnly) Variety.sample(
+            artists.filter { a -> candidatesByArtist.getValue(a).any(english::matches) }, 1, seed("english-artist"), weight = ::artistWeight,
+        ) else emptyList()
+        val core = Variety.sample(artists.filterNot { it in englishArtist }.take(12), if (personalOnly) 2 else 3, seed("core-artists"), weight = ::artistWeight)
+        val pickedArtists = englishArtist + core
+        val rotating = if (personalOnly) Variety.sample(
+            artists.filterNot { it in pickedArtists }.let { remaining -> remaining.drop(6).ifEmpty { remaining } },
+            1, seed("rotating-artist"), weight = ::artistWeight,
+        ) else emptyList()
+        val seeds = (pickedArtists + rotating).mapNotNull { artist ->
+            val candidates = candidatesByArtist.getValue(artist)
+            val eligible = if (artist in englishArtist) candidates.filter(english::matches) else candidates
+            val songs = eligible.filterNot { it.isVideo }.ifEmpty { eligible }
+            Variety.sample(songs, 1, seed("seed:$artist"), weight = ::libraryWeight).firstOrNull()
         }
         val played = s.events.map { it.songId }.toSet()
         val playedSongs = played.mapNotNull { s.songs[it] }.map { LocalRadio.sameSong(it) }.toSet()
-        // All three at once (#371: one after the other, they were a good part of the wait for the section).
-        val radios = kotlinx.coroutines.coroutineScope {
-            seeds.map { seed -> async { runCatching { radioOf(seed) }.getOrDefault(emptyList()).filter { it.id != seed.id } } }.awaitAll()
+        val everHeard = if (personalOnly) com.prism.music.data.readOrElse("history", Heard.NOTHING) { c.discover.heard() } else Heard.NOTHING
+        val (radios, related) = kotlinx.coroutines.coroutineScope {
+            val relatedJobs = relatedTo?.let { load ->
+                seeds.take(2).map { seed -> async { DiscoveryTools.available { listOf(load(seed)) } } }
+            }.orEmpty()
+            val radioJobs = seeds.map { seed -> async {
+                DiscoveryTools.available { radioOf(seed) }.filter { it.id != seed.id }.distinctBy(LocalRadio::sameSong)
+            } }
+            radioJobs.awaitAll() to relatedJobs.awaitAll().flatten()
         }
-        val discovered = radios.flatten()
-            .filter { fresh(it) && it.id !in played && LocalRadio.sameSong(it) !in playedSongs && !c.recFeedback.turnedDown(it.id, known = false) }
+        val supported = radios.flatten().groupingBy { LocalRadio.sameSong(it) }.eachCount()
+        val relatedSongs = related.flatMap { it.songs }.mapTo(hashSetOf(), LocalRadio::sameSong)
+        val relatedArtists = related.flatMap { it.artists }.mapTo(hashSetOf()) { it.title.lowercase() }
+        val librarySongKeys = library.mapTo(hashSetOf(), LocalRadio::sameSong)
+        val radioRank = HashMap<String, Int>()
+        radios.forEach { songs -> songs.forEachIndexed { rank, song -> radioRank.merge(LocalRadio.sameSong(song), rank, ::minOf) } }
+        fun relatedArtist(song: Song) = song.artists.any { it.name.lowercase() in relatedArtists }
+        fun hasSupport(song: Song): Boolean {
+            val key = LocalRadio.sameSong(song)
+            return affinity(song) > 0.0 || (supported[key] ?: 0) >= 2 || key in relatedSongs || relatedArtist(song)
+        }
+        val unheard = (radios.flatten() + related.flatMap { it.songs })
+            .filter {
+                val key = LocalRadio.sameSong(it)
+                fresh(it) && it.id !in played && key !in playedSongs && !c.recFeedback.turnedDown(it.id, known = false) &&
+                    (!personalOnly || (key !in librarySongKeys && !everHeard.has(it)))
+            }
             .distinctBy { LocalRadio.sameSong(it) }
-            .sortedByDescending { (0.6 + affinity(it)) * j(it.id) }
+        val ranked = unheard.filter { !personalOnly || hasSupport(it) }.sortedByDescending { song ->
+            val key = LocalRadio.sameSong(song)
+            val proximity = 1.0 / (1 + (radioRank[key] ?: 12) / 6.0)
+            (proximity + (supported[key] ?: 0) * 0.55 + (if (key in relatedSongs) 1.0 else 0.0) +
+                (if (relatedArtist(song)) 0.7 else 0.0) + affinity(song) * 0.5) * j(song.id)
+        }
+        // A few top radio results can introduce a new artist even when only one source surfaced them.
+        val exploratory = if (personalOnly) unheard.filterNot(::hasSupport)
+            .filter { (radioRank[LocalRadio.sameSong(it)] ?: Int.MAX_VALUE) < 7 }
+            .sortedBy { radioRank[LocalRadio.sameSong(it)] }.distinctBy { it.primaryArtist.lowercase() }.take(4) else emptyList()
+        val englishDiscoveries = if (personalOnly) Variety.roundRobin(ranked.filter(english::matches)) { it.primaryArtist } else emptyList()
+        val discovered = withRegularPicks(
+            withRegularPicks(ranked, exploratory, every = 5, firstAt = 4),
+            englishDiscoveries, every = 3, firstAt = 1,
+        )
+        if (discoveriesOnly || onDiscoveries != null) {
+            val freshPicks = takeTurns(emptyList(), discovered, emptyList(), count, shown)
+            if (discoveriesOnly) return freshPicks
+            onDiscoveries?.invoke(freshPicks)
+        }
         val fromYouTube = youtube.filter { fresh(it) && affinity(it) > 0.05 }
 
         val out = takeTurns(favourites, discovered, fromYouTube, count, shown).toMutableList()
+        if (personalOnly) return out
         // Still short (a new listener's few artists): YouTube's own fill the rest.
         val taken = out.map { LocalRadio.sameSong(it) }.toSet()
         youtube.filter { fresh(it) && LocalRadio.sameSong(it) !in taken }.take(count - out.size).forEach { out += it }

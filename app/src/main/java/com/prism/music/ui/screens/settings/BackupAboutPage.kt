@@ -145,6 +145,7 @@ internal fun BackupAboutContent(
     // The flows keep their dialogs here, not in a row: a row scrolled away would take its dialog with it.
     val backup = rememberBackupFlow()
     val restore = rememberRestoreFlow()
+    val cloudBackup = com.prism.music.ui.screens.rememberCloudBackupFlow()
     // Prism also checks on its own (at most hourly), as Home does; pre-releases are never offered (UpdateChecker).
     val offered by c.updates.available.collectAsState()
     LaunchedEffect(Unit) { c.updates.check() }
@@ -159,6 +160,9 @@ internal fun BackupAboutContent(
 
     SettingsPageScaffold(page.title, bottomPadding, showBack = showBack, onSearch = onSearch, find = find, reset = reset.pageReset()) {
         group(tr(R.string.backup)) {
+            if (com.prism.music.data.CloudBackup.available) {
+                LinkRow(tr(R.string.cloud_backup), info = tr(R.string.cloud_backup_contents), action = true, onClick = cloudBackup)
+            }
             LinkRow(tr(R.string.back_up), info = tr(R.string.settings_library_replay_sign_in_you), action = true, onClick = backup)
             LinkRow(tr(R.string.restore_from_a_backup), info = tr(R.string.replaces_what_the_backup_holds_then), action = true, onClick = restore)
         }

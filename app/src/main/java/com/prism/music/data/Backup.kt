@@ -63,7 +63,7 @@ class Backup(private val c: AppContainer) {
     private fun fromPrism(m: BackupManifest) = m.app.isNotBlank()
 
     /** Writes a backup of [parts] to [uri]. */
-    suspend fun export(uri: Uri, parts: Set<BackupPart>) = withContext(Dispatchers.IO) {
+    suspend fun export(uri: Uri, parts: Set<BackupPart>, includeCachedArtwork: Boolean = true) = withContext(Dispatchers.IO) {
         // Fold Room's write-ahead log into the main file so the copy is complete.
         runCatching { c.db.query(androidx.sqlite.db.SimpleSQLiteQuery("PRAGMA wal_checkpoint(FULL)")).close() }
         val withDownloads = BackupPart.DOWNLOADS in parts
@@ -92,7 +92,9 @@ class Backup(private val c: AppContainer) {
                 zip.closeEntry()
             }
             filesToBackUp(parts).forEach { f ->
-                zip.putNextEntry(ZipEntry(f.relativeTo(data).invariantSeparatorsPath))
+                val path = f.relativeTo(data).invariantSeparatorsPath
+                if (!includeCachedArtwork && path.startsWith("files/artwork/")) return@forEach
+                zip.putNextEntry(ZipEntry(path))
                 f.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
@@ -356,7 +358,7 @@ class Backup(private val c: AppContainer) {
             put(com.prism.music.data.spotify.Spotify.DIR, BackupPart.ACCOUNTS)
             listOf("downloads", "canvas_saved").forEach { put(it, BackupPart.DOWNLOADS) }
             // Downloaded data files (models/) can always be downloaded again; stems are made again; staging is a restore's.
-            listOf(STAGING, "models", "stems", REDOWNLOAD, RESTORED_SETTINGS).forEach { put(it, null) }
+            listOf(STAGING, "datastore", "models", "stems", REDOWNLOAD, RESTORED_SETTINGS).forEach { put(it, null) }
             // Lyric translations (1.7.8) are a cache of Google's answers, asked for again when missing.
             put("translations", null)
         }
@@ -402,7 +404,9 @@ class Backup(private val c: AppContainer) {
                 // In with the backup.
                 val settingsFile = File(staging, SETTINGS_ENTRY)
                 staging.walkTopDown().filter { it.isFile && it != manifestFile && it != settingsFile }.forEach { f ->
-                    val target = File(data, f.relativeTo(staging).path)
+                    val path = f.relativeTo(staging)
+                    if (!whole && path.invariantSeparatorsPath.startsWith("files/datastore/")) return@forEach
+                    val target = File(data, path.path)
                     target.parentFile?.mkdirs()
                     if (!f.renameTo(target)) { f.copyTo(target, overwrite = true); f.delete() }
                 }

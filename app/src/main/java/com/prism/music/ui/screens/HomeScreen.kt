@@ -233,6 +233,9 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     val c = LocalContainer.current
     val nav = LocalNavigator.current
     val settings = LocalAppSettings.current
+    val personalizedHome = !settings.isLoggedIn &&
+        settings.behavior.quickPicksSource == com.prism.music.data.prefs.QuickPicksSource.PRISM
+    val personalHomeNow by rememberUpdatedState(personalizedHome)
     // Signed out, signed in or switched while Home was kept: another account's lists don't stay on show.
     val signIn = "${settings.cookie.hashCode()}/${settings.authUser}"
     val signInChanged = remember(signIn) {
@@ -242,7 +245,8 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     // Where each YouTube section's More button goes, by its key: the section is found again under another language's title.
     val shelfIds = remember { c.app.getSharedPreferences("home_shelf_ids", android.content.Context.MODE_PRIVATE) }
     fun knownShelves(): Map<String, String> = shelfIds.all.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }.toMap()
-    val home = rememberLoad("home") {
+    val home = rememberLoad("home:$personalizedHome") {
+        if (personalHomeNow) return@rememberLoad emptyList<Shelf>()
         // YouTube's personalised feed reshuffles per load, so pinned shelves (e.g. "Mixed for you")
         // can land on a later page or drop out entirely. Page further for them, and keep the last
         // copy we saw rather than silently hiding a section the user turned on.
@@ -306,12 +310,14 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     val ytShelves = remember(settings.homeLayout, shelves) {
         matchShelves(settings.homeLayout.map { it.key }.filter { it.startsWith(HomeSections.YT_PREFIX) }, shelves, knownShelves())
     }
-    val layout = remember(settings.homeLayout, shelves, settings.autoAddSections, picks, settings.homeHideKinds, today, ytShelves) {
+    val layout = remember(settings.homeLayout, shelves, settings.autoAddSections, picks, settings.homeHideKinds, today, ytShelves, personalizedHome) {
         val known = settings.homeLayout.map { it.key }.toSet()
         val placed = ytShelves.values
-        val extra = if (settings.autoAddSections) extraShelves(shelves, known, placed, picks, shelves.quickPicks(settings.accountName), dial, settings.homeHideKinds)
+        val extra = if (!personalizedHome && settings.autoAddSections) extraShelves(shelves, known, placed, picks, shelves.quickPicks(settings.accountName), dial, settings.homeHideKinds)
             .map { HomeSectionConfig(shelfKey(it.title), it.title) } else emptyList()
-        HomeSections.inSeason(settings.homeLayout, today).filter { it.visible } + extra
+        HomeSections.inSeason(settings.homeLayout, today).filter {
+            it.visible && (!personalizedHome || (!it.key.startsWith(HomeSections.YT_PREFIX) && it.key != HomeSections.SEASONAL))
+        } + extra
     }
 
     // Worked out here rather than inside their rows: a LazyColumn row forgets its state when scrolled off, so these were
@@ -321,7 +327,7 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     val seed = recent.firstOrNull()?.takeIf { picks == null && home.state is Load.Ok }
     val standIn by produceState(standInPicks.value, seed?.id, refreshes) {
         // One stand-in per session (a pull to refresh asks again): each new play swapped the whole section before.
-        if (seed == null || standInPicks.value.isNotEmpty()) return@produceState
+        if (personalHomeNow || seed == null || standInPicks.value.isNotEmpty()) return@produceState
         val heard = recent.take(50).map { it.id }.toSet()
         value = runCatching { c.ytm.next(seed.id, playlistId = "RDAMVM${seed.id}").songs }.getOrDefault(emptyList())
             .filter { it.id !in heard && !it.isVideo }.distinctBy { it.id }.take(20)
@@ -344,6 +350,7 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     // artists, YouTube's own that fit): worked out once a session, again on pull to refresh.
     val youtubePicks = picks?.items?.filterIsInstance<SongItem>()?.map { it.song } ?: standIn
     val onlineNow by c.network.online.collectAsState()
+    val personalPicks = if (personalizedHome) libraryQuickPicks(refreshes, onlineNow, recent) else LibraryPicks()
     // #297 / #277 (1.7.9.3): the section showed the kept Home's picks, then the fresh feed's, then these. Now they're
     // made once, from the fresh feed (not the copy kept from last time), and the section waits for them.
     val homeSettled = home.state !is Load.Loading
@@ -352,8 +359,8 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     // #371: not waiting for all of Home when YouTube's picks are in already (kept from last time, or this load's first
     // page): they're one in five of the set, and all of Home first was most of the 5 s the section took to come.
     val canMakePicks = homeSettled || youtubePicks.isNotEmpty()
-    val curated by produceState(curatedPicks.value, canMakePicks, refreshes, onlineNow, picksFromYouTube, signIn) {
-        if (picksFromYouTube || !onlineNow || (curatedPicks.value.isNotEmpty() && curatedAt.value == refreshes)) return@produceState
+    val curated by produceState(curatedPicks.value, canMakePicks, refreshes, onlineNow, picksFromYouTube, signIn, personalizedHome) {
+        if (personalizedHome || picksFromYouTube || !onlineNow || (curatedPicks.value.isNotEmpty() && curatedAt.value == refreshes)) return@produceState
         val day = java.time.LocalDate.now().toString()
         val whose = c.settings.current.let { "${it.authUser}|${it.dataSyncId}|${it.accountName}" }
         // #371: today's set, if it's been made: at once at the start, and it's what the listener last saw.
@@ -400,7 +407,7 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     // YouTube's own come from the fresh feed, not the Home kept from last time, so they come in once too.
     // Once this load's own picks are in, they needn't wait for the pages after them (#371).
     val youtubeReady = (homeSettled && !home.refreshing) || early != null
-    val pickSongs = remember(curated, madeFor, youtubePicks, dialItems, picksReady, refreshes, picksFromYouTube, youtubeReady) {
+    val pickSongs = if (personalizedHome) personalPicks.songs else remember(curated, madeFor, youtubePicks, dialItems, picksReady, refreshes, picksFromYouTube, youtubeReady) {
         val onDial = if (dialItems.size >= 3) dialItems.map { it.id }.toSet() else emptySet()
         val before = shownPicks.value
         val sameSource = shownPicksYouTube.value == picksFromYouTube
@@ -446,9 +453,9 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
             item(key = "performance") { PerformanceOffer() }
             item(key = "smartDownloads") { SmartDownloadsOffer() }
             if (!online) item(key = "offline") { OfflineNote() }
-            if (online && home.state is Load.Loading && shelves.isEmpty()) item { LoadingState() }
+            if (!personalizedHome && online && home.state is Load.Loading && shelves.isEmpty()) item { LoadingState() }
             // With the last Home on show, a failed refresh leaves it there (pull to refresh tries again).
-            (home.state as? Load.Err)?.takeIf { online && shelves.isEmpty() }?.let { e -> item { ErrorState(e.message) { home.reload(false) } } }
+            (home.state as? Load.Err)?.takeIf { !personalizedHome && online && shelves.isEmpty() }?.let { e -> item { ErrorState(e.message) { home.reload(false) } } }
 
             layout.forEach { raw ->
                 // A section renamed in Customize Home (1.7.6) goes by its new name, also where it reads its own title.
@@ -458,6 +465,10 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
                     Column(Modifier.customizable(com.prism.music.ui.components.CustomizeTarget.HOME_SECTION, cfg.key)) {
                     when (cfg.key) {
                         HomeSections.GREETING -> GreetingSection(cfg, recent)
+                        HomeSections.EXPLORE -> {
+                            SectionHeader(cfg.titled(tr(R.string.explore)), onMore = { nav.go(Routes.EXPLORE) })
+                            ExploreShortcuts()
+                        }
                         HomeSections.QUICK_PICKS -> {
                             // When YouTube serves no picks, songs like your latest play stand in (from its radio, less
                             // what you've just heard). Your recent plays themselves never do: that's Recently played.
@@ -465,8 +476,16 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
                             // Offline: the songs on the phone you're most likely to want, played in order.
                             if (!online) { if (offlinePicks.isNotEmpty()) SongSection(cfg, cfg.titled(tr(R.string.quick_picks)), tr(R.string.ready_offline), offlinePicks, snap = true) }
                             else if (pickSongs.isNotEmpty()) SongSection(
-                                cfg, cfg.titled(tr(R.string.quick_picks)), picks?.strapline, pickSongs, snap = true,
+                                cfg, cfg.titled(tr(R.string.quick_picks)), if (personalizedHome) tr(R.string.quick_picks_from_library) else picks?.strapline,
+                                pickSongs, snap = true,
                                 play = if (settings.quickPicksRadio) { list, i -> c.player.playRadio(list[i]) } else null,
+                                onMore = { nav.go(Routes.discovery("new")) },
+                            )
+                        }
+                        HomeSections.FRESH_MUSIC -> if (online && personalPicks.discoveries.isNotEmpty()) {
+                            SongSection(
+                                cfg, cfg.titled(tr(R.string.discovery_fresh)), null, personalPicks.discoveries,
+                                snap = true, onMore = { nav.go(Routes.discovery("new")) },
                             )
                         }
                         HomeSections.RECENT -> {
@@ -572,6 +591,64 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
  * Once, on a phone that may find 1.7's effects heavy (Android 9 or older, or 4 GB of memory or less): Performance mode,
  * offered where it's seen. Either answer puts the card away for good; Settings has the switch.
  */
+private data class LibraryPicks(val songs: List<Song> = emptyList(), val discoveries: List<Song> = emptyList())
+
+@Composable
+private fun libraryQuickPicks(refreshes: Int, online: Boolean, recent: List<Song>): LibraryPicks {
+    val c = LocalContainer.current
+    val likes by c.library.liked.collectAsState()
+    val playlists by c.prismLibrary.lists.collectAsState()
+    val excluded by c.exclusions.playlists.collectAsState()
+    val disliked by c.library.dislikedIds.collectAsState()
+    val playlistSongs = remember(playlists, excluded) {
+        playlists.filter { it.smart == null && !c.exclusions.isPlaylistExcluded(it.id) }.flatMap { it.songs }.distinctBy { it.id }
+    }
+    val day by produceState(java.time.LocalDate.now().toString()) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            value = java.time.LocalDate.now().toString()
+        }
+    }
+    val taste = remember(likes, playlistSongs, recent, disliked) {
+        listOf(likes.map { it.id }, playlistSongs.map { it.id }, recent.map { it.id }, disliked.sorted()).hashCode()
+    }
+    val recommendations by produceState(LibraryPicks(), taste, day, refreshes, online) {
+        if (!online) return@produceState
+        if (likes.isEmpty() && playlistSongs.isEmpty() && recent.isEmpty()) {
+            value = LibraryPicks()
+            return@produceState
+        }
+        val profile = "aftertone-library-balanced:$taste"
+        if (refreshes == 0) {
+            c.homeCache.readDiscovery(day, profile)?.let {
+                value = LibraryPicks(it.songs, it.discoveries)
+                return@produceState
+            }
+        }
+        val shown = (value.songs + value.discoveries).map { it.id }.toSet()
+        val picks = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var discoveries = emptyList<Song>()
+            val songs = c.yourMusic.quickPicks(
+                emptyList(),
+                radioOf = { seed -> c.ytm.next(seed.id, playlistId = "RDAMVM${seed.id}").songs },
+                draw = refreshes,
+                shown = shown,
+                libraryLikes = likes,
+                playlistSongs = playlistSongs,
+                relatedTo = { c.ytm.related(it.id, it.title) },
+                onDiscoveries = { discoveries = it },
+            )
+            LibraryPicks(songs, discoveries)
+        }
+        value = picks
+        if (picks.songs.isNotEmpty()) c.homeCache.writePicks(day, profile, picks.songs, picks.discoveries)
+    }
+    return LibraryPicks(
+        recommendations.songs.filterNot { it.id in disliked },
+        recommendations.discoveries.filterNot { it.id in disliked },
+    )
+}
+
 @Composable
 private fun PerformanceOffer() {
     val c = LocalContainer.current

@@ -135,6 +135,7 @@ private fun NavTab.icon(): ImageVector = when (this) {
     NavTab.DOWNLOADS -> PrismIcons.Download
     NavTab.LIKED -> PrismIcons.Heart
     NavTab.PODCASTS -> PrismIcons.Podcasts
+    NavTab.EXPLORE -> PrismIcons.Globe
 }
 
 /** The tab bar in its style ([NavBarStyle]) with its labels, the first tab current. */

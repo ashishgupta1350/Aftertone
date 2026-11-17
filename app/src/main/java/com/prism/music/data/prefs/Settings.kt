@@ -285,7 +285,7 @@ data class BehaviorPrefs(
     /** Turning the phone's media volume all the way down pauses, turning it up again plays on (#157). */
     val pauseOnMute: Boolean = false,
     /** When a video goes picture-in-picture (#167). */
-    val pip: PipMode = PipMode.AUTO,
+    val pip: PipMode = PipMode.MENU,
     /** Swipe up on the player's lower half for the queue (or lyrics), down to close them (#200, #197). */
     val panelSwipes: Boolean = false,
     /** Home's Recently played: every song, or the albums and playlists they were played from (#196). */
@@ -375,7 +375,7 @@ data class BehaviorPrefs(
     /** #298 (1.8.2): playlists whose new songs download by themselves, by [com.prism.music.download.PlaylistDownloads.keepKey]. */
     val keptPlaylists: Set<String> = emptySet(),
     /** #406 (1.8.4): swiping a song row adds it to the queue (as before); off, a row is just a row. */
-    val rowSwipes: Boolean = true,
+    val rowSwipes: Boolean = false,
     /**
      * #404 (1.8.4): every song's lyrics this many ms earlier (positive) or later (negative), on top of each song's own
      * nudge; within [LYRICS_OFFSET_MS].
@@ -857,7 +857,7 @@ enum class LocalSection(val label: String) {
 enum class NavTab(val label: String) {
     HOME(tr(R.string.home)), SEARCH(tr(R.string.search)), LIBRARY(tr(R.string.library)), REPLAY(tr(R.string.replay_2)), SETTINGS(tr(R.string.settings)), LOCAL(tr(R.string.local_files)),
     // 1.7.6: any of these pages as a tab too.
-    DOWNLOADS(tr(R.string.downloads)), LIKED(tr(R.string.liked_songs)), PODCASTS(tr(R.string.podcasts));
+    DOWNLOADS(tr(R.string.downloads)), LIKED(tr(R.string.liked_songs)), PODCASTS(tr(R.string.podcasts)), EXPLORE(tr(R.string.explore));
 
     companion object {
         /** The most tabs the bar holds (labels still fit on a phone). */
@@ -1128,7 +1128,9 @@ data class EqSettings(
 
 object HomeSections {
     const val GREETING = "local:greeting"
+    const val EXPLORE = "local:explore"
     const val QUICK_PICKS = "local:quick_picks"
+    const val FRESH_MUSIC = "local:fresh_music"
     const val RECENT = "local:recent"
     const val LIKED = "local:liked"
     const val DOWNLOADS = "local:downloads"
@@ -1177,7 +1179,9 @@ object HomeSections {
         val id = when (s.key) {
             REPLAY -> com.prism.music.R.string.section_replay_teaser
             GREETING -> com.prism.music.R.string.section_shortcut_tiles
+            EXPLORE -> com.prism.music.R.string.explore
             QUICK_PICKS -> com.prism.music.R.string.quick_picks
+            FRESH_MUSIC -> com.prism.music.R.string.discovery_fresh
             MADE_FOR_YOU -> com.prism.music.R.string.made_for_you
             NEW_RELEASES -> com.prism.music.R.string.section_new_from_your_artists
             RECENT -> com.prism.music.R.string.recently_played
@@ -1215,7 +1219,9 @@ object HomeSections {
     val defaults = listOf(
         HomeSectionConfig(REPLAY, "Replay teaser", style = SectionStyle.HERO),
         HomeSectionConfig(GREETING, TILES_TITLE, style = SectionStyle.HERO),
+        HomeSectionConfig(EXPLORE, "Explore"),
         HomeSectionConfig(QUICK_PICKS, "Quick picks", style = SectionStyle.LIST),
+        HomeSectionConfig(FRESH_MUSIC, "New music", style = SectionStyle.LIST),
         HomeSectionConfig(MADE_FOR_YOU, "Made for you"),
         HomeSectionConfig(NEW_RELEASES, NEW_RELEASES_TITLE),
         HomeSectionConfig(RECENT, "Recently played"),
@@ -1237,7 +1243,9 @@ object HomeSections {
     val initial = listOf(
         HomeSectionConfig(REPLAY, "Replay teaser", style = SectionStyle.HERO),
         HomeSectionConfig(GREETING, TILES_TITLE, style = SectionStyle.HERO),
+        HomeSectionConfig(EXPLORE, "Explore"),
         HomeSectionConfig(QUICK_PICKS, "Quick picks", style = SectionStyle.LIST),
+        HomeSectionConfig(FRESH_MUSIC, "New music", style = SectionStyle.LIST),
         HomeSectionConfig(SEASONAL, "Holiday music"),
         HomeSectionConfig(MADE_FOR_YOU, "Made for you"),
         HomeSectionConfig(NEW_RELEASES, NEW_RELEASES_TITLE),
@@ -1604,7 +1612,7 @@ data class AppSettings(
     val navStyle: NavBarStyle = NavBarStyle.FLOATING,
     val navLabels: NavLabels = NavLabels.ALWAYS,
     val navHideOnScroll: Boolean = true,
-    val navTabs: List<NavTab> = listOf(NavTab.HOME, NavTab.LIBRARY, NavTab.SEARCH, NavTab.REPLAY),
+    val navTabs: List<NavTab> = listOf(NavTab.HOME, NavTab.LIBRARY, NavTab.SEARCH, NavTab.REPLAY, NavTab.EXPLORE),
     /** Tabs given their own names (1.7.6); the rest keep theirs. */
     val tabNames: Map<NavTab, String> = emptyMap(),
     val navBarSize: NavBarSize = NavBarSize.STANDARD,
@@ -1645,7 +1653,7 @@ data class AppSettings(
     val lyricsStripTwoLines: Boolean = false,
     // GitHub requests picked for 1.7.5.
     /** #111: a liked song and its liked music video show once, as the song (Liked songs, Library, the car). */
-    val mergeLikedVideos: Boolean = true,
+    val mergeLikedVideos: Boolean = false,
     /** #115: the status bar stays hidden in Prism (a swipe from the top shows it for a moment). */
     val hideStatusBar: Boolean = false,
     /** #116: what the player's volume slider changes, and Prism's own level (0 … 1) when it's Prism's. */
@@ -2992,6 +3000,22 @@ class SettingsRepository(
         once("home_replay_top") { HomeSections.replayOnTop(it) }
         // The holiday mixes' section (1.8.0), after Quick picks: it only shows in November and December.
         once("home_holiday_1_8") { HomeSections.withNewSections(it, listOf(HomeSectionConfig(HomeSections.SEASONAL, "Holiday music"))) }
+        once("home_fresh_music") {
+            HomeSections.withNewSections(it, listOf(HomeSectionConfig(HomeSections.FRESH_MUSIC, "New music", style = SectionStyle.LIST)))
+        }
+        once("home_explore") {
+            HomeSections.withNewSections(it, listOf(HomeSectionConfig(HomeSections.EXPLORE, "Explore")), after = HomeSections.GREETING)
+        }
+        val exploreTabAdded = booleanPreferencesKey("explore_tab_added")
+        if (p[exploreTabAdded] != true) {
+            p[K.navTabs]?.let { stored ->
+                val tabs = stored.split(',').mapNotNull { name -> NavTab.entries.firstOrNull { it.name == name } }.distinct()
+                if (tabs.isNotEmpty() && tabs.size < NavTab.MAX && NavTab.EXPLORE !in tabs) {
+                    p[K.navTabs] = (tabs + NavTab.EXPLORE).joinToString(",") { it.name }
+                }
+            }
+            p[exploreTabAdded] = true
+        }
         keepSmartDownloads(p)
         splitLyricsOnPhone(p)
     }

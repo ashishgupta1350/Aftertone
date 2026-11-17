@@ -226,10 +226,13 @@ class HistoryImporter(private val db: PrismDatabase) {
     /** Lines up library songs (Liked Songs, playlists) for matching, beside the history's. */
     suspend fun addLibrarySongs(tracks: List<LibraryTrack>) {
         val dao = db.imports()
-        tracks.distinctBy { it.key }.chunked(500).forEach { chunk ->
+        tracks.sortedBy { it.title == it.youtubeId }.distinctBy { it.key }.chunked(500).forEach { chunk ->
             val known = dao.matches(chunk.map { it.key }).map { it.songKey }.toSet()
             dao.putMatches(chunk.filter { it.key !in known }.map { t ->
-                ImportMatchEntity(t.key, t.title.take(MAX_TEXT), t.artist.take(MAX_TEXT), t.album?.take(MAX_TEXT), sourceId = t.sourceId, status = MatchStatus.PENDING.name)
+                ImportMatchEntity(
+                    t.key, t.title.take(MAX_TEXT), t.artist.take(MAX_TEXT), t.album?.take(MAX_TEXT),
+                    sourceId = t.sourceId, youtubeId = t.youtubeId, status = MatchStatus.PENDING.name,
+                )
             })
         }
     }

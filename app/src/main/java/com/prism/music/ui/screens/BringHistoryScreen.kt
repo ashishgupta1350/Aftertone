@@ -252,9 +252,10 @@ fun BringHistoryScreen(bottomPadding: Dp) {
                     val again = p.isRepeat || news != LibraryNews.of(lib)
                     if (news.liked > 0) {
                         val detail = if (again) tr(R.string.imp_liked_new_detail, count(news.liked)) else tr(R.string.imp_liked_detail, count(lib.liked.size))
-                        Toggle(tr(R.string.imp_liked_songs), detail, liked, info = tr(R.string.imp_liked_info)) { liked = it }
+                        val info = if (p.source == ImportSource.TAKEOUT) R.string.imp_takeout_liked_info else R.string.imp_liked_info
+                        Toggle(tr(R.string.imp_liked_songs), detail, liked, info = tr(info)) { liked = it }
                         // Off unless asked for: the likes stay in Prism, and library sync leaves them be.
-                        if (liked && c.settings.current.isLoggedIn) {
+                        if (liked && p.source != ImportSource.TAKEOUT && c.settings.current.isLoggedIn) {
                             val onAccount by imports.likeOnAccount.collectAsState()
                             Toggle(tr(R.string.imp_like_on_account), tr(R.string.imp_like_on_account_detail), onAccount, info = tr(R.string.imp_like_on_account_info)) { imports.setLikeOnAccount(it) }
                         }

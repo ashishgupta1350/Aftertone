@@ -70,8 +70,14 @@ data class ParsedPlay(
 
 /** A song in an imported library (liked, or in a playlist). */
 @Serializable
-data class LibraryTrack(val title: String, val artist: String, val album: String? = null, val sourceId: String? = null) {
-    val key: String get() = ImportKeys.songKey(title, artist)
+data class LibraryTrack(
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val sourceId: String? = null,
+    val youtubeId: String? = null,
+) {
+    val key: String get() = youtubeId?.let { "yt:$it" } ?: ImportKeys.songKey(title, artist)
 }
 
 /** [uri]: Spotify's own id for the playlist, when the download names it (a newer download then finds it if renamed). */
@@ -148,4 +154,4 @@ data class LibraryNews(
 }
 
 /** The kinds of file a data download holds that Prism reads. */
-enum class FileKind { SPOTIFY_EXTENDED, SPOTIFY_ACCOUNT, SPOTIFY_LIBRARY, SPOTIFY_PLAYLISTS, TAKEOUT_HISTORY }
+enum class FileKind { SPOTIFY_EXTENDED, SPOTIFY_ACCOUNT, SPOTIFY_LIBRARY, SPOTIFY_PLAYLISTS, TAKEOUT_HISTORY, TAKEOUT_LIBRARY }

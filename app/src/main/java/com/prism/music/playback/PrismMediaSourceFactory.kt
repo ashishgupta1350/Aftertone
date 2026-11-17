@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
+import com.prism.music.data.stream.anonymousYouTubeBlocked
 
 /**
  * Builds audio-only sources normally, and an audio+video merged source when a
@@ -104,7 +105,7 @@ object VideoLegs {
     const val VIDEO_LEG_FAILURE_MS = 60_000L
 }
 
-/** Notes each load error of a music video's legs ([VideoLegs]), then handles it as [inner] does. */
+/** Records music-video leg errors and lets the player recover immediately from YouTube's sign-in challenge. */
 @OptIn(UnstableApi::class)
 internal class NoteVideoLegFailures(
     private val picture: Boolean,
@@ -119,6 +120,7 @@ internal class NoteVideoLegFailures(
                 VideoLegs.last = VideoLegFailure(id, picture, loadErrorInfo.loadEventInfo.uri, loadErrorInfo.exception, now())
             }
         }
+        if (anonymousYouTubeBlocked(loadErrorInfo.exception)) return C.TIME_UNSET
         return inner.getRetryDelayMsFor(loadErrorInfo)
     }
 }

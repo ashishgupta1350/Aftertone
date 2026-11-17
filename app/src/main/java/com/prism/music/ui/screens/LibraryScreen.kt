@@ -333,7 +333,10 @@ fun LibraryScreen(bottomPadding: Dp) {
     var followedOpen by remember { mutableStateOf<com.prism.music.data.spotify.SpotifyPlaylist?>(null) }
     followedOpen?.let { p -> SpotifyFollowedSheet(p) { followedOpen = null } }
     var openingLink by remember { mutableStateOf(false) }
-    if (openingLink) OpenPlaylistLinkDialog({ openingLink = false }) { id -> openingLink = false; nav.go(Routes.playlist(id)) }
+    if (openingLink) OpenPlaylistLinkDialog({ openingLink = false }) { id, spotify ->
+        openingLink = false
+        nav.go(if (spotify) Routes.discovery("playlists", id) else Routes.playlist(id))
+    }
     // Playlists in a folder (1.7.6) show in it, not in the list; pinned ones lead.
     val inFolders = remember(folders) { folders.flatMap { f -> f.playlists.map { it.removePrefix("VL") } }.toSet() }
     val sortedPlaylists = remember(myPlaylists, playlistOrder, playlistSort, pinned, inFolders) {
@@ -564,6 +567,12 @@ fun LibraryScreen(bottomPadding: Dp) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(start = 8.dp, top = 4.dp, bottom = 4.dp)) {
                                 // A playlist from a link (H7), without YouTube's share menu.
                                 if (!rearranging) com.prism.music.ui.components.PrismChip(false, { openingLink = true }, tr(R.string.open_a_link), icon = PrismIcons.Link)
+                                if (!rearranging) com.prism.music.ui.components.PrismChip(
+                                    false, { nav.go(Routes.discovery("playlists")) }, tr(R.string.discovery_find_playlists), icon = PrismIcons.Search,
+                                )
+                                if (!rearranging) com.prism.music.ui.components.PrismChip(
+                                    false, { nav.go(Routes.BRING_HISTORY) }, tr(R.string.import_youtube_music), icon = PrismIcons.PlaylistAdd,
+                                )
                                 // A folder with nothing in it yet: until now one could only be made while moving a playlist.
                                 if (!rearranging) com.prism.music.ui.components.PrismChip(false, { newFolder = true }, tr(R.string.new_folder), icon = PrismIcons.Folder)
                                 // 1.8.3: a playlist made of rules, kept up to date by itself.
@@ -1034,22 +1043,24 @@ internal fun playlistIdIn(text: String): String? =
 
 /** Library → Playlists → Open a link (H7): paste a playlist's link, and it opens (to play, keep or copy). */
 @Composable
-private fun OpenPlaylistLinkDialog(onDismiss: () -> Unit, onOpen: (String) -> Unit) {
+private fun OpenPlaylistLinkDialog(onDismiss: () -> Unit, onOpen: (String, Boolean) -> Unit) {
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    var text by remember { mutableStateOf(clipboard.getText()?.text?.takeIf { playlistIdIn(it) != null } ?: "") }
-    val id = playlistIdIn(text)
+    val spotify = com.prism.music.data.spotify.PublicSpotifyPlaylists
+    var text by remember { mutableStateOf(clipboard.getText()?.text?.takeIf { playlistIdIn(it) != null || spotify.linkIn(it) != null } ?: "") }
+    val spotifyLink = spotify.linkIn(text)
+    val id = spotifyLink ?: playlistIdIn(text)
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(tr(R.string.open_a_playlist_link)) },
         text = {
             com.prism.music.ui.components.PrismTextField(
                 text, { text = it }, Modifier.fillMaxWidth(), singleLine = true,
-                placeholder = { Text(tr(R.string.youtube_com_playlist_list)) },
+                placeholder = { Text(tr(R.string.discovery_playlist_link_hint)) },
                 supportingText = if (text.isNotBlank() && id == null) ({ Text(tr(R.string.that_isn_t_a_playlist_s)) }) else null,
                 isError = text.isNotBlank() && id == null,
             )
         },
-        confirmButton = { PrismTextButton(onClick = { id?.let(onOpen) }, enabled = id != null) { Text(tr(R.string.open)) } },
+        confirmButton = { PrismTextButton(onClick = { id?.let { onOpen(it, spotifyLink != null) } }, enabled = id != null) { Text(tr(R.string.open)) } },
         dismissButton = { PrismTextButton(onClick = onDismiss) { Text(tr(R.string.cancel)) } },
     )
 }

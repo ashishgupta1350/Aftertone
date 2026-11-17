@@ -1,19 +1,29 @@
+# Aftertone
+
+Aftertone is an Android music app based on [Prism](https://github.com/Yigder/Prism). It adds ordered YouTube Music library imports, personalized discovery and Explore, public Spotify playlist lookup, and alternate audio sources for playback when available.
+
+Build with JDK 17 or later and Android SDK 37 using `./gradlew :app:assembleDebug` (`.\gradlew.bat :app:assembleDebug` on Windows). See [CONTRIBUTING.md](CONTRIBUTING.md) for build variants.
+
+Optional cloud backup uses `aftertone.cloud.apiKey` and `aftertone.cloud.databaseUrl` from your local `local.properties`. The example rules in [cloud](cloud/) require your Firebase account UID to replace `REPLACE_WITH_OWNER_UID` before deployment.
+
+## Upstream Prism project
+
 <div align="center">
 
 <img src="docs/screenshots/icon.png" width="96" alt="Prism app icon">
 
-# Prism
+### Prism
 
 **Your music, refracted.**<br>
 A free YouTube Music app for Android phones and TVs.<br>
 Lyrics that light up word by word, mixes made on your phone, and no ads or tracking.
 
-[![Latest release](https://img.shields.io/github/v/release/Yigder/Prism?label=download&color=7c4dff)](../../releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/Yigder/Prism?label=download&color=7c4dff)](https://github.com/Yigder/Prism/releases/latest)
 ![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3ddc84?logo=android&logoColor=white)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-support%20Prism-ff5e5b?logo=ko-fi&logoColor=white)](https://ko-fi.com/yigder)
 
-### [⬇ Download Prism.apk](../../releases/latest/download/Prism.apk)
+### [⬇ Download upstream Prism.apk](https://github.com/Yigder/Prism/releases/latest/download/Prism.apk)
 
 [What's new](../../releases/latest) · [All changes](CHANGELOG.md) · [Watch the film](../../releases/download/v1.7.0/Prism-1.7-film.mp4)
 

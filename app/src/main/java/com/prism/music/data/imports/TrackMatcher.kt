@@ -1,5 +1,6 @@
 package com.prism.music.data.imports
 
+import com.prism.music.data.model.AlbumRef
 import com.prism.music.data.model.ArtistRef
 import com.prism.music.data.model.Song
 import kotlin.math.abs
@@ -65,7 +66,10 @@ class TrackMatcher(private val search: suspend (String) -> List<Song>) {
         fun byId(t: TrackToMatch, found: List<Song>): MatchResult {
             val id = t.youtubeId ?: return MatchResult(MatchStatus.NONE, null, emptyList())
             val known = found.firstOrNull { it.id == id }
-            val song = known ?: Song(id, t.title, listOfNotNull(t.artist.takeIf { it.isNotBlank() }?.let { ArtistRef(it) }), durationSec = 0)
+            val song = known ?: Song(
+                id, t.title, listOfNotNull(t.artist.takeIf { it.isNotBlank() }?.let { ArtistRef(it) }),
+                album = t.album?.takeIf { it.isNotBlank() }?.let { AlbumRef(it) },
+            )
             return MatchResult(MatchStatus.SURE, song, listOf(song))
         }
 

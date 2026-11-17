@@ -42,6 +42,9 @@ class HistoryImports(private val c: AppContainer) {
     private val prefs = c.app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val importer = HistoryImporter(c.db)
     private val jobFile = File(c.app.filesDir, "imports/library.json")
+    private val takeoutJobFile = File(c.app.filesDir, "imports/takeout-library.json")
+
+    private fun libraryFile(source: ImportSource) = if (source == ImportSource.TAKEOUT) takeoutJobFile else jobFile
 
     private val _counted = MutableStateFlow(ImportSource.entries.filter { prefs.getBoolean(countKey(it), false) }.toSet())
     /** The imported sources Replay and Rewind count besides Prism's own plays. */
@@ -216,7 +219,14 @@ class HistoryImports(private val c: AppContainer) {
                     ImportSource.SPOTIFY -> SpotifyExport.read(nameOf(u), s, SpotifyExport.Options(accountHistory = !extended), count).let { r ->
                         library += r.library; kinds += r.kinds; skipped += r.skippedFiles
                     }
-                    ImportSource.TAKEOUT -> if (TakeoutHistory.read(nameOf(u), s, count)) kinds += FileKind.TAKEOUT_HISTORY else skipped++
+                    ImportSource.TAKEOUT -> {
+                        val (history, export) = TakeoutHistory.readExport(nameOf(u), s, count)
+                        if (history) kinds += FileKind.TAKEOUT_HISTORY
+                        if (!export.isEmpty) {
+                            library += export
+                            kinds += FileKind.TAKEOUT_LIBRARY
+                        } else if (!history) skipped++
+                    }
                     ImportSource.LASTFM, ImportSource.SPOTIFY_LIVE, ImportSource.YOUTUBE_LIVE -> Unit
                 }
             }
@@ -226,7 +236,7 @@ class HistoryImports(private val c: AppContainer) {
             source, plays, keys.size, first.takeIf { plays > 0 }, last.takeIf { plays > 0 }, library, kinds, skipped,
             newPlays = fresh.plays, newFirstAt = fresh.firstAt, newLastAt = fresh.lastAt,
             lastImportAt = ImportReminders.lastImport(prefs, source),
-            libraryNews = if (library.isEmpty) LibraryNews() else LibraryJob.load(jobFile).news(library),
+            libraryNews = if (library.isEmpty) LibraryNews() else LibraryJob.load(libraryFile(source)).news(library),
         )
     }
 
@@ -262,14 +272,23 @@ class HistoryImports(private val c: AppContainer) {
                                 SpotifyExport.read(nameOf(u), s, SpotifyExport.Options(history = choice.history, accountHistory = !extended), batched(sink, plays) { runBlocking { drain() } })
                                     .let { library += it.library }
                             }
-                            ImportSource.TAKEOUT -> if (choice.history) TakeoutHistory.read(nameOf(u), s, batched(sink, plays) { runBlocking { drain() } })
+                            ImportSource.TAKEOUT -> {
+                                val readPlay = if (choice.history) batched(sink, plays) { runBlocking { drain() } } else null
+                                if (choice.library.liked || choice.library.playlists) {
+                                    library += TakeoutHistory.readExport(nameOf(u), s, readPlay).second
+                                } else if (readPlay != null) {
+                                    TakeoutHistory.read(nameOf(u), s, readPlay)
+                                }
+                            }
                             ImportSource.LASTFM, ImportSource.SPOTIFY_LIVE, ImportSource.YOUTUBE_LIVE -> Unit
                         }
                     }
                     drain()
                 }
                 // What the library adds is told apart from the plays (a repeat may bring only new likes or playlist songs).
-                val stats = session.finish().let { s -> if (library.isEmpty) s else s.copy(library = addLibrary(library, choice.library)) }
+                val stats = session.finish().let { s ->
+                    if (library.isEmpty) s else s.copy(library = addLibrary(source, library, choice.library))
+                }
                 // Plays the Spotify connection read live that this download has too count once (the download's).
                 if (source == ImportSource.SPOTIFY) runCatching { c.db.spotify().dropLiveTwins(com.prism.music.data.spotify.SpotifyRecent.TWIN_MS) }
                 // And YouTube Music (live)'s that a Takeout has (Takeout is the complete history).
@@ -342,17 +361,18 @@ class HistoryImports(private val c: AppContainer) {
     }
 
     /** Lines [lib] up (as far as [choice] says); returns what of it is new. */
-    private suspend fun addLibrary(lib: ParsedLibrary, choice: LibraryJob.LibraryChoice): LibraryNews {
-        val before = LibraryJob.load(jobFile)
+    private suspend fun addLibrary(source: ImportSource, lib: ParsedLibrary, choice: LibraryJob.LibraryChoice): LibraryNews = matching.withLock {
+        val file = libraryFile(source)
+        val before = LibraryJob.load(file)
         val news = before.news(ParsedLibrary(
             if (choice.liked) lib.liked else emptyList(), if (choice.playlists) lib.playlists else emptyList(),
             if (choice.albums) lib.albums else emptyList(), if (choice.artists) lib.artists else emptyList(),
         ))
         val job = before.plus(lib, choice)
-        LibraryJob.save(jobFile, job)
         val tracks = (if (choice.liked) lib.liked else emptyList()) + (if (choice.playlists) lib.playlists.flatMap { it.tracks } else emptyList())
         importer.addLibrarySongs(tracks)
-        return news
+        LibraryJob.save(file, job)
+        news
     }
 
     /** The first import turns "shape your mixes" on (the owner's choice); after that it's the listener's. */
@@ -371,14 +391,17 @@ class HistoryImports(private val c: AppContainer) {
      */
     suspend fun remove(source: ImportSource) = lock.withLock {
         withContext(Dispatchers.IO) {
-            val keep = if (source == ImportSource.SPOTIFY) {
-                val job = LibraryJob.load(jobFile).remembered()
-                if (job == LibraryJob()) jobFile.delete() else LibraryJob.save(jobFile, job)
-                emptySet()
-            } else LibraryJob.load(jobFile).keys
+            val file = libraryFile(source)
             // The Spotify connection's songs (its files only exist while it's connected) keep their matches too.
             val spotify = if (File(c.app.filesDir, com.prism.music.data.spotify.Spotify.DIR).exists()) c.spotify.matchKeys() else emptySet()
-            importer.remove(source, keep + spotify)
+            matching.withLock {
+                if (source == ImportSource.SPOTIFY || source == ImportSource.TAKEOUT) {
+                    val job = LibraryJob.load(file).remembered()
+                    if (job == LibraryJob()) file.delete() else LibraryJob.save(file, job)
+                }
+                val keep = LibraryJob.load(jobFile).keys + LibraryJob.load(takeoutJobFile).keys
+                importer.remove(source, keep + spotify)
+            }
             setCounted(source, false)
             prefs.edit().remove(ImportReminders.lastKey(source)).remove(ImportReminders.remindedKey(source)).apply()
             _lastImports.value = lastImportsNow()
@@ -400,6 +423,15 @@ class HistoryImports(private val c: AppContainer) {
         c.ytm.search(q, SearchFilter.SONGS).items.filterIsInstance<SongItem>().map { it.song }
     }
 
+    private suspend fun match(m: com.prism.music.data.db.ImportMatchEntity): MatchResult {
+        val track = m.toTrack()
+        val id = track.youtubeId
+        if (id == null || m.songKey != "yt:$id") return matcher.match(track)
+        val known = c.db.songs().get(id)?.toSong()?.takeUnless { it.title == id }
+        val found = known ?: c.ytm.next(id).songs.firstOrNull { it.id == id }
+        return TrackMatcher.byId(track, listOfNotNull(found))
+    }
+
     /**
      * Matches songs until none are left or [until] (a time), a few searches at a time with a pause between, so YouTube
      * sees about what a person searching would send. [progress]: songs done, and how many were waiting.
@@ -415,7 +447,7 @@ class HistoryImports(private val c: AppContainer) {
             if (batch.isEmpty()) break
             for (group in batch.chunked(AT_ONCE)) {
                 val answers = coroutineScope {
-                    group.map { m -> async { m to runCatching { matcher.match(m.toTrack()) } } }.awaitAll()
+                    group.map { m -> async { m to runCatching { match(m) } } }.awaitAll()
                 }
                 for ((m, r) in answers) {
                     val result = r.getOrNull()
@@ -439,12 +471,16 @@ class HistoryImports(private val c: AppContainer) {
     suspend fun applyLibrary() = matching.withLock { applyLibraryNow() }
 
     private suspend fun applyLibraryNow() = withContext(Dispatchers.IO) {
-        val job = LibraryJob.load(jobFile)
-        if (job == LibraryJob()) return@withContext
-        LibraryJob.save(jobFile, job.apply(hands))
+        for ((file, hands) in listOf(jobFile to hands, takeoutJobFile to takeoutHands)) {
+            val job = LibraryJob.load(file)
+            if (job != LibraryJob()) LibraryJob.save(file, job.apply(hands))
+        }
     }
 
-    private val hands = object : LibraryJob.Hands {
+    private val hands = libraryHands(localOnly = false)
+    private val takeoutHands = libraryHands(localOnly = true)
+
+    private fun libraryHands(localOnly: Boolean) = object : LibraryJob.Hands {
         override suspend fun matched(keys: Collection<String>): Map<String, Song> {
             val ids = keys.chunked(500).flatMap { c.db.imports().matches(it) }
                 .filter { MatchStatus.of(it.status).matched && it.matchedId != null }.associate { it.songKey to it.matchedId!! }
@@ -464,7 +500,7 @@ class HistoryImports(private val c: AppContainer) {
                     // The download's order, first newest.
                     (existing?.liked != true).also { if (it) c.db.songs().upsert(s.toEntity(existing).copy(liked = true, likedAt = now - i)) }
                 },
-                onAccount = c.settings.current.isLoggedIn && _likeOnAccount.value,
+                onAccount = !localOnly && c.settings.current.isLoggedIn && _likeOnAccount.value,
                 likeThere = { id -> runCatching { c.ytm.like(id, true) }.isSuccess },
                 keep = ::keepLikes, unkeep = ::unkeepLike,
             )
