@@ -15,13 +15,14 @@ function shuffled(rows) {
 }
 
 export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, record }) {
-  const audio = $("audio");
+  let audio = $("audio");
   const dialog = $("now-playing");
   const transport = [];
   const scrubbers = [];
   const volumeControls = [];
   const likeControls = [];
-  const prepared = new Map();
+  let prepared;
+  let failedPreload;
   let owner = null;
   let queue = [];
   let index = -1;
@@ -50,15 +51,56 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     id: song.id, title: song.title, artist: song.artists?.[0]?.name ?? "", duration: song.durationSec || 0,
   }).toString();
 
-  function prepare(song) {
-    if (!owner || !song || document.hidden || navigator.connection?.saveData) return;
+  function release(element) {
+    element.pause();
+    element.removeAttribute("src");
+    element.load();
+  }
+
+  function clearPrepared() {
+    if (!prepared) return;
+    const { element } = prepared;
+    prepared = null;
+    element.onerror = null;
+    release(element);
+  }
+
+  function prepare(song, reason = "intent") {
+    const connection = navigator.connection;
+    if (!owner || !song || document.hidden || connection?.saveData ||
+      /2g/.test(connection?.effectiveType ?? "") || waiting || song.id === current()?.id && audio.hasAttribute("src")) return;
+    if (reason === "featured" && (current() || prepared?.reason === "intent")) return;
     const key = streamParams(song);
-    const until = Date.now() + 60000;
-    if (prepared.get(key) > Date.now()) return;
-    if (prepared.size >= 32) prepared.delete(prepared.keys().next().value);
-    prepared.set(key, until);
-    const forget = () => { if (prepared.get(key) === until) prepared.delete(key); };
-    fetch("/api/prepare?" + key).then((result) => { if (!result.ok) forget(); }).catch(forget);
+    if (prepared?.key === key || failedPreload?.key === key && failedPreload.until > Date.now()) return;
+    clearPrepared();
+    const element = new Audio();
+    prepared = { key, element, reason };
+    element.preload = "auto";
+    element.onerror = () => {
+      if (prepared?.element !== element) return;
+      failedPreload = { key, until: Date.now() + 20000 };
+      clearPrepared();
+    };
+    element.src = "/api/stream?" + key;
+  }
+
+  function activatePrepared(key) {
+    if (prepared?.key !== key || prepared.element.error) {
+      clearPrepared();
+      return false;
+    }
+    const { element } = prepared;
+    prepared = null;
+    const previous = audio;
+    for (const name of Object.keys(audioEvents)) previous["on" + name] = null;
+    element.id = previous.id;
+    element.volume = previous.volume;
+    element.muted = previous.muted;
+    previous.replaceWith(element);
+    audio = element;
+    bindAudio();
+    release(previous);
+    return true;
   }
 
   function setWaiting(value) {
@@ -97,11 +139,10 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     repeat = "off";
     failed = false;
     waiting = false;
-    prepared.clear();
+    clearPrepared();
+    failedPreload = null;
     activation = null;
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
+    release(audio);
     audio.volume = 1;
     audio.muted = false;
     startAt = null;
@@ -143,9 +184,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   function select(position, autoplay = true, offset = 0) {
     if (!queue[position]) return;
     listen(true);
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
+    release(audio);
     index = position;
     startAt = null;
     resumePosition = offset;
@@ -172,7 +211,10 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       failed = false;
       showMessage("");
       activation ||= Date.now();
-      audio.src = "/api/stream?" + streamParams(song);
+      const key = streamParams(song);
+      if (activatePrepared(key)) {
+        if (audio.readyState > 0) audioEvents.loadedmetadata();
+      } else audio.src = "/api/stream?" + key;
     }
     if (audio.readyState < 3) setWaiting(true);
     const selected = activation;
@@ -202,6 +244,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     } else {
       if (next) queue.splice(index + 1, 0, song);
       else queue.push(song);
+      if (!audio.paused) prepare(queue[index + 1], "queue");
       renderQueue();
       paintControls();
       save();
@@ -297,7 +340,9 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     $("player").hidden = !song;
     document.body.classList.toggle("has-player", Boolean(song));
     if (!song) return;
-    [ $("art"), $("playing-glow"), $("playing-art") ].forEach((image) => artwork(image, song, false));
+    artwork($("art"), song, false, "52px");
+    artwork($("playing-glow"), song, false, "320px");
+    artwork($("playing-art"), song, false, "(max-width: 700px) 85vw, 520px");
     for (const id of ["song", "playing-song"]) $(id).textContent = song.title;
     for (const id of ["artist", "playing-artist"]) $(id).textContent = artist(song);
     if (navigator.mediaSession && typeof MediaMetadata === "function") {
@@ -525,42 +570,52 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   $("lyrics-tab").onclick = () => open("lyrics");
   $("queue-tab").onclick = () => open("queue");
 
-  audio.onloadedmetadata = () => {
-    if (startAt !== null) {
-      const at = startAt;
-      startAt = null;
-      seek(at);
-    }
-    paintProgress();
+  const audioEvents = {
+    loadedmetadata() {
+      if (startAt !== null) {
+        const at = startAt;
+        startAt = null;
+        seek(at);
+      }
+      paintProgress();
+    },
+    timeupdate() {
+      const position = audio.currentTime;
+      const passed = position - lastPosition;
+      if (!audio.seeking && passed > 0 && passed < 3) listened += passed;
+      lastPosition = position;
+      listen();
+      paintProgress();
+      paintControls();
+      if (Date.now() - lastPersist >= 5000) {
+        lastPersist = Date.now();
+        save();
+      }
+    },
+    play: paintControls,
+    waiting() { if (!audio.paused && !failed && current()) setWaiting(true); },
+    playing() { setWaiting(false); prepare(queue[index + 1], "queue"); },
+    pause() { if (audio.paused) setWaiting(false); listen(true); paintControls(); save(); },
+    ended() { listen(true); step(1, true); paintControls(); },
+    volumechange: paintControls,
+    error() {
+      if (!owner || !current() || !audio.hasAttribute("src")) return;
+      failed = true;
+      setWaiting(false);
+      showMessage("This track couldn’t play.", true);
+      paintControls();
+      say("This track couldn’t play. Press play to retry.");
+      api("me").catch(() => {});
+    },
   };
-  audio.ontimeupdate = () => {
-    const position = audio.currentTime;
-    const passed = position - lastPosition;
-    if (!audio.seeking && passed > 0 && passed < 3) listened += passed;
-    lastPosition = position;
-    listen();
-    paintProgress();
-    paintControls();
-    if (Date.now() - lastPersist >= 5000) {
-      lastPersist = Date.now();
-      save();
-    }
-  };
-  audio.onplay = paintControls;
-  audio.onwaiting = () => { if (!audio.paused && !failed && current()) setWaiting(true); };
-  audio.onplaying = () => { setWaiting(false); prepare(queue[index + 1]); };
-  audio.onpause = () => { if (audio.paused) setWaiting(false); listen(true); paintControls(); save(); };
-  audio.onended = () => { listen(true); step(1, true); paintControls(); };
-  audio.onvolumechange = paintControls;
-  audio.onerror = () => {
-    if (!owner || !current() || !audio.hasAttribute("src")) return;
-    failed = true;
-    setWaiting(false);
-    showMessage("This track couldn’t play.", true);
-    paintControls();
-    say("This track couldn’t play. Press play to retry.");
-    api("me").catch(() => {});
-  };
+  function bindAudio() {
+    for (const [name, listener] of Object.entries(audioEvents)) audio["on" + name] = listener;
+  }
+  bindAudio();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && audio.paused) clearPrepared();
+    else if (!document.hidden && !audio.paused) prepare(queue[index + 1], "queue");
+  });
   window.addEventListener("pagehide", save);
 
   if (navigator.mediaSession) {

@@ -2,9 +2,10 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { ApiError, createFirebase } from "./firebase.mjs";
-import { emptyLibrary, isTrackId, normalizeLibrary, tasteSeeds, trackIdentity } from "./state.mjs";
-import { prepareAudio, search, stream } from "./music.mjs";
+import { emptyLibrary, isTrackId, normalizeLibrary } from "./state.mjs";
+import { search, stream } from "./music.mjs";
 import { lyrics } from "./lyrics.mjs";
+import { knownTopic, normalizeTaste, recommend, tasteArtists } from "./discover.mjs";
 
 const firebase = createFirebase();
 const port = Number(process.env.PORT || 4371);
@@ -15,6 +16,7 @@ const files = new Map([
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/player.js", ["player.js", "text/javascript; charset=utf-8"]],
   ["/ui.js", ["ui.js", "text/javascript; charset=utf-8"]],
+  ["/taste.js", ["taste.js", "text/javascript; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
   ["/icon.png", ["icon.png", "image/png"]],
 ]);
@@ -55,6 +57,11 @@ function libraryOf(value) {
   return value ? { revision: value.revision, library: JSON.parse(value.data) } : { revision: 0, library: emptyLibrary() };
 }
 
+function savedTaste(value) {
+  if (!value?.data) return null;
+  return normalizeTaste(JSON.parse(value.data));
+}
+
 function reply(res, response) {
   if (res.destroyed) {
     void response.body?.cancel();
@@ -66,50 +73,6 @@ function reply(res, response) {
   body.on("error", () => res.destroy());
   res.once("close", () => body.destroy());
   body.pipe(res);
-}
-
-const topics = new Map(Object.entries({
-  hindi: "Hindi songs", english: "English pop songs", indie: "indie songs",
-  pop: "pop songs", rock: "rock songs", hiphop: "hip hop songs",
-  chill: "chill songs", workout: "workout music", focus: "focus instrumental music",
-}));
-const languageQueries = new Map([
-  ["hindi", ["Hindi songs", "Bollywood Hindi hits", "Hindi film songs"]],
-  ["english", ["English pop songs", "English pop music hits", "English indie songs"]],
-]);
-
-async function recommend(library, topicId, rotation) {
-  const { artists, known, knownTracks } = tasteSeeds(library);
-  const topic = topics.get(topicId);
-  const language = languageQueries.get(topicId);
-  const day = Math.floor(Date.now() / 86400000);
-  const discovery = artists.slice(2, 16);
-  const start = (day + rotation) % Math.max(1, discovery.length);
-  const rotated = discovery.slice(start).concat(discovery.slice(0, start));
-  const seeds = [...artists.slice(0, 2), ...rotated.slice(0, topic ? 1 : 3)];
-  const queries = language ?? [...(topic ? [topic] : []), ...seeds.map((artist) => artist + " " + (topic || "songs"))];
-  if (!queries.length) return [];
-  const groups = await Promise.allSettled(queries.map((query) => search(query)));
-  const lists = groups.map((group) => group.status === "fulfilled" ? group.value : []);
-  if (groups.every((group) => group.status === "rejected")) throw new ApiError(502, "Discovery is temporarily unavailable.");
-  const songs = [];
-  for (let index = 0; index < 18 && songs.length < 24; index++) {
-    for (const list of lists) {
-      const song = list[index];
-      if (!song || known.has(song.id)) continue;
-      const identity = trackIdentity(song);
-      if (identity && knownTracks.has(identity)) continue;
-      if (identity) knownTracks.add(identity);
-      known.add(song.id);
-      songs.push(song);
-    }
-  }
-  if (language) {
-    const favored = new Set(artists.slice(0, 12).map((artist) => artist.toLocaleLowerCase("en-US")));
-    const taste = (song) => song.artists.some(({ name }) => favored.has(name.toLocaleLowerCase("en-US"))) ? 1 : 0;
-    songs.sort((a, b) => taste(b) - taste(a));
-  }
-  return songs.slice(0, 24);
 }
 
 const loginAttempts = new Map();
@@ -165,6 +128,21 @@ async function route(req, res, signal) {
     const id = user.name || (user.email?.endsWith("@accounts.aftertone.invalid") ? null : user.email);
     return Response.json({ uid: user.uid, id, admin: firebase.isAdmin(user.uid) });
   }
+  if (get && path === "/api/taste") {
+    return Response.json(savedTaste((await firebase.taste(user.uid).get()).val()));
+  }
+  if (post && path === "/api/taste") {
+    const preferences = normalizeTaste(await jsonBody(req));
+    if (!preferences) throw new ApiError(400, "Invalid listening preferences.");
+    // Realtime Database omits empty arrays. Keep the saved choice in one value, including a deliberate skip.
+    await firebase.taste(user.uid).set({ data: JSON.stringify(preferences) });
+    return Response.json(preferences);
+  }
+  if (get && path === "/api/taste/artists") {
+    const requested = query.get("q")?.trim().slice(0, 100) ?? "";
+    const languages = normalizeTaste({ languages: (query.get("languages") ?? "").split(","), genres: [], artists: [] }).languages;
+    return Response.json(await tasteArtists(requested, languages));
+  }
   if (get && path === "/api/admin/users") return Response.json(await firebase.users(user.uid, query.get("page")));
   if (post && path === "/api/admin/users") {
     const { uid, disabled } = await jsonBody(req);
@@ -196,9 +174,11 @@ async function route(req, res, signal) {
   }
   if (get && path === "/api/recommendations") {
     const requested = query.get("topic");
-    if (requested && !topics.has(requested)) throw new ApiError(400, "Unknown discovery topic.");
+    if (requested && !knownTopic(requested)) throw new ApiError(400, "Unknown discovery topic.");
     const rotation = Math.min(99, Math.max(0, Math.trunc(Number(query.get("rotation")) || 0)));
-    return Response.json(await recommend(libraryOf((await state.get()).val()).library, requested, rotation));
+    const usesLibrary = requested !== "popular" && requested !== "new";
+    const [library, taste] = await Promise.all([usesLibrary ? state.get() : null, firebase.taste(user.uid).get()]);
+    return Response.json(await recommend(library ? libraryOf(library.val()).library : null, savedTaste(taste.val()), requested, rotation));
   }
   if (get && path === "/api/lyrics") {
     const title = query.get("title")?.trim().slice(0, 220);
@@ -213,16 +193,13 @@ async function route(req, res, signal) {
     if (!q) throw new ApiError(400, "Enter a song or artist.");
     return Response.json(await search(q, true));
   }
-  if (get && (path === "/api/stream" || path === "/api/prepare") && isTrackId(query.get("id"))) {
+  if (get && path === "/api/stream" && isTrackId(query.get("id"))) {
     const metadata = {
       title: query.get("title")?.slice(0, 220),
       artist: query.get("artist")?.slice(0, 160),
       durationSec: Math.max(0, Math.min(Number(query.get("duration")) || 0, 86400)),
     };
     const id = query.get("id");
-    if (path === "/api/prepare") {
-      return new Response(null, { status: await prepareAudio(id, metadata) ? 204 : 503 });
-    }
     return stream(id, req.headers.range ?? "bytes=0-", signal, metadata);
   }
   throw new ApiError(404, "This page is unavailable.");

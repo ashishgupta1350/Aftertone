@@ -10,7 +10,7 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=10000 PATH="/opt/aftertone/bin:${PATH}
 WORKDIR /srv/aftertone
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.mjs firebase.mjs music.mjs state.mjs lyrics.mjs ./
+COPY server.mjs firebase.mjs music.mjs state.mjs lyrics.mjs discover.mjs ./
 COPY public/ ./public/
 USER node
 EXPOSE 10000

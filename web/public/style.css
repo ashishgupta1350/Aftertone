@@ -215,6 +215,25 @@ audio { display: none }
 #playlist-fields { display: grid; gap: 10px; margin-block: 15px }
 .field { display: grid; gap: 6px }
 .dialog-actions { display: flex; justify-content: end; align-items: center; gap: 8px; margin-top: 16px }
+.taste-dialog { width: min(620px,calc(100% - 24px)); padding: clamp(17px, 4vw, 30px) }
+.taste-dialog .dialog-actions { flex-wrap: wrap }
+.taste-dialog h2 { margin: 0; font-size: clamp(23px, 4vw, 32px); outline: none }
+.taste-dialog p { margin: 8px 0 20px }
+.taste-dialog fieldset { padding: 0; margin: 0 0 18px; min-width: 0; border: 0 }
+.taste-dialog legend { padding: 0; margin-bottom: 8px; font-weight: 650 }
+.taste-options { display: flex; flex-wrap: wrap; gap: 7px }
+.taste-options:empty { display: none }
+.taste-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--line); padding: 6px 12px; border-radius: 999px; background: var(--soft); color: var(--text) }
+.taste-chip:hover,.taste-artist:hover { background: var(--raised); border-color: var(--muted) }
+.taste-chip[aria-pressed=true],.taste-artist[aria-pressed=true] { border-color: var(--accent); background: #bdf9d31a; color: var(--accent) }
+.taste-chip .symbol { width: 14px; height: 14px }
+#taste-search { margin-bottom: 10px }
+.taste-artists { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(155px,100%),1fr)); gap: 7px; margin-top: 12px; color: var(--muted) }
+.taste-artist { display: flex; align-items: center; gap: 8px; padding: 7px; min-width: 0; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); color: var(--text) }
+.taste-artist img { width: 37px; height: 37px; flex: 0 0 auto; object-fit: cover; border-radius: 50% }
+.taste-artist span { overflow-wrap: anywhere }
+#taste-notice { color: #ffc9b7; margin-top: 8px; font-size: 13px }
+#taste-notice:empty { display: none }
 
 .player {
   position: fixed; z-index: 30; left: 12px; right: 12px; bottom: 12px;

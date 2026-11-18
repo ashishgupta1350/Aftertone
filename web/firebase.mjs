@@ -98,6 +98,7 @@ export function createFirebase(env = process.env) {
     account, verify, isAdmin: (uid) => Boolean(adminUid && uid === adminUid),
     refresh: (refresh) => exchange(new URL(secureToken + "/v1/token"), new URLSearchParams({ grant_type: "refresh_token", refresh_token: refresh })),
     library: (uid) => db.ref("aftertoneLibraries").child(uid),
+    taste: (uid) => db.ref("aftertonePreferences").child(uid),
     async users(uid, page) {
       requireAdmin(uid);
       const result = await auth.listUsers(100, page || undefined);

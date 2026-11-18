@@ -1,14 +1,11 @@
 import { $, node, icon, button, iconButton, setIcon, artwork, artist, trackMatches, moveTrack } from "./ui.js";
 import { createPlayer } from "./player.js";
+import { createTastePicker, topics } from "./taste.js";
 
 const blank = () => ({ revision: 0, library: { likes: [], playlists: [], plays: [] } });
-const topics = [
-  ["hindi", "Hindi", "language"], ["english", "English", "language"],
-  ["chill", "Chill", "mood"], ["workout", "Workout", "mood"], ["focus", "Focus", "mood"],
-  ["indie", "Indie", "genre"], ["pop", "Pop", "genre"], ["rock", "Rock", "genre"], ["hiphop", "Hip-hop", "genre"],
-];
 let state = blank();
 let user = null;
+let preferences = null;
 let signup = false;
 let refresh;
 let signingOut = false;
@@ -51,11 +48,36 @@ async function api(path, body, retry = true) {
   throw new Error(message);
 }
 
+const tastePicker = createTastePicker({
+  loadArtists: (q, languages) => api("taste/artists?" + new URLSearchParams({ q, languages: languages.join(",") }))
+    .then(({ data }) => data),
+  async save(value) {
+    const owner = user?.uid;
+    const { data } = await api("taste", value);
+    if (user?.uid !== owner) return;
+    preferences = data;
+    feeds.clear();
+    rotation = 0;
+    requestAnimationFrame(render);
+  },
+});
+$("edit-taste").onclick = () => {
+  $("profile").open = false;
+  tastePicker.open(preferences, true);
+};
+
+function hasListeningTaste() {
+  const { likes, playlists, plays } = state.library;
+  return Boolean(likes.length || playlists.some(({ songs }) => songs.length) || plays.some(({ excluded }) => !excluded));
+}
+
 function showLogin(message = "") {
   routeVersion++;
   user = null;
   player.reset();
   state = blank();
+  preferences = null;
+  tastePicker.close();
   feeds.clear();
   collectionFilters.clear();
   collectionLimits.clear();
@@ -74,14 +96,16 @@ function showLogin(message = "") {
 
 async function openAccount() {
   const account = (await api("me")).data;
-  const initial = (await api("state")).data;
+  const [initial, taste] = await Promise.all([api("state"), api("taste")]);
   user = account;
   signingOut = false;
-  state = initial;
+  state = initial.data;
+  preferences = taste.data;
   $("login").hidden = true;
   $("sidebar").hidden = $("top").hidden = $("main").hidden = false;
   $("admin-link").hidden = !user.admin;
   player.restore(user.uid);
+  if (!preferences && !hasListeningTaste()) tastePicker.open();
   render();
 }
 
@@ -277,7 +301,8 @@ function trackCover(song, tracks, eager = false) {
   play.setAttribute("aria-label", "Play " + song.title);
   const frame = node("span", "", "cover-play");
   frame.append(icon("play"));
-  play.append(artwork(node("img"), song, !eager), frame);
+  const sizes = eager ? "56px" : "(max-width: 440px) 46vw, (max-width: 700px) 30vw, (max-width: 1120px) 24vw, 16vw";
+  play.append(artwork(node("img"), song, !eager, sizes), frame);
   return prepareOnIntent(play, song);
 }
 function likeButton(song) {
@@ -360,14 +385,15 @@ function empty(message, symbol = "music", action) {
 }
 function featured(song, songs, label) {
   const banner = node("section", "", "featured");
-  const background = artwork(node("img", "", "feature-glow"), song, false);
+  const sizes = "(max-width: 700px) 30vw, 320px";
+  const background = artwork(node("img", "", "feature-glow"), song, false, sizes);
   const copy = node("div", "", "feature-copy");
   copy.append(node("p", label, "eyebrow"), node("h2", song.title), node("p", artist(song), "feature-artist"));
   const actions = node("div", "", "inline-actions");
   actions.append(prepareOnIntent(button("Play now", () => player.play(song, songs), "accent", "play"), song),
     iconButton("queue", "Add to queue", () => player.add(song), "glass-button"));
   copy.append(actions);
-  banner.append(background, copy, artwork(node("img", "", "feature-art"), song, false));
+  banner.append(background, copy, artwork(node("img", "", "feature-art"), song, false, sizes));
   return banner;
 }
 
@@ -475,7 +501,7 @@ function playlistPage(main, key) {
     location.hash = "playlists";
   }, "Delete"), "quiet"));
   const cover = node("div", "", "collection-art");
-  if (playlist.songs.length) cover.append(artwork(node("img"), playlist.songs[0], false));
+  if (playlist.songs.length) cover.append(artwork(node("img"), playlist.songs[0], false, "(max-width: 700px) 30vw, 220px"));
   else cover.append(icon("playlist"));
   main.append(collection(playlist.name, playlist.songs, { key, cover, action: actions,
     options: { playlist: key, reorder: queueOrder === key, empty: "Add a song to start this playlist." } }));
@@ -592,10 +618,15 @@ function home(main, version) {
     link("Explore", "#explore", "quiet home-explore", "explore")));
   const hero = node("div", "", "featured-slot");
   const collection = recent.length ? recent : saved.length ? saved : playlists.find((list) => list.songs.length)?.songs;
-  if (collection?.length) hero.append(featured(collection[0], collection, recent.length ? "From your history" : "From your library"));
+  function lead(songs, label) {
+    if (version !== routeVersion || !songs?.length || hero.children.length) return;
+    hero.append(featured(songs[0], songs, label));
+    if (!tastePicker.openByUser) player.prepare(songs[0], "featured");
+  }
+  lead(collection, recent.length ? "From your history" : "From your library");
   main.append(hero);
 
-  const hasTaste = likes.length || plays.some((play) => !play.excluded) || playlists.some((list) => list.songs.length);
+  const hasTaste = hasListeningTaste() || preferences?.languages.length || preferences?.genres.length || preferences?.artists.length;
   if (hasTaste) {
     const slot = node("div");
     const refresh = iconButton("refresh", "Refresh Quick picks", () => {
@@ -604,19 +635,16 @@ function home(main, version) {
       fillShelf(slot, picks(), version, 6).finally(() => { refresh.disabled = false; });
     });
     main.append(section("Quick picks", slot, refresh));
-    fillShelf(slot, picks(), version, 6);
-  } else {
-    const hindi = node("div");
-    const english = node("div");
-    main.append(section("Hindi music", hindi, link("Browse", "#explore=hindi", "section-link", "arrow")),
-      section("English music", english, link("Browse", "#explore=english", "section-link", "arrow")));
-    fillShelf(hindi, picks("hindi"), version).then((songs) => {
-      if (version === routeVersion && !hero.children.length && songs?.length) hero.append(featured(songs[0], songs, "Hindi music"));
-    });
-    fillShelf(english, picks("english"), version).then((songs) => {
-      if (version === routeVersion && !hero.children.length && songs?.length) hero.append(featured(songs[0], songs, "English music"));
-    });
+    void fillShelf(slot, picks(), version, 6).then((songs) => lead(songs, "Picked for you"));
   }
+  const popular = node("div");
+  main.append(section("Popular now", popular, link("Browse", "#explore=popular", "section-link", "arrow")));
+  void fillShelf(popular, picks("popular"), version, 6).then((songs) => {
+    lead(songs, "Popular now");
+  });
+  const releases = node("div");
+  main.append(section("New releases", releases, link("Browse", "#explore=new", "section-link", "arrow")));
+  void fillShelf(releases, picks("new"), version, 6).then((songs) => lead(songs, "New release"));
   if (recent.length > 1) main.append(section("Listen again", songGrid(recent.slice(1)), link("History", "#history", "section-link", "arrow")));
   if (playlists.length) main.append(section("Your playlists", playlistGrid(playlists.slice(0, 6)), link("View all", "#playlists", "section-link", "arrow")));
   if (saved.length && !recent.length) main.append(section("Liked songs", songGrid(saved), link("View all", "#likes", "section-link", "arrow")));
@@ -624,16 +652,15 @@ function home(main, version) {
 
 function explore(main, topic, version) {
   const selected = topics.find(([slug]) => slug === topic);
-  if (selected) {
-    main.append(link("Explore", "#explore", "back-link"), pageTitle(selected[1]));
+  if (selected || ["popular", "new"].includes(topic)) {
+    main.append(link("Explore", "#explore", "back-link"), pageTitle(selected?.[1] ?? (topic === "new" ? "New releases" : "Popular now")));
     const slot = node("div");
     main.append(slot);
-    fillShelf(slot, picks(selected[0]), version, 24);
+    fillShelf(slot, picks(topic), version, 24);
     return;
   }
   main.append(pageTitle("Explore"), browseTiles());
-  const { likes, playlists, plays } = state.library;
-  if (likes.length || playlists.some(({ songs }) => songs.length) || plays.some(({ excluded }) => !excluded)) {
+  if (preferences || hasListeningTaste()) {
     const slot = node("div");
     main.append(section("Discover for you", slot));
     fillShelf(slot, picks(), version, 12);
@@ -659,7 +686,10 @@ async function searchPage(main, query, version) {
   main.append(section("Results for “" + query + "”", body));
   try {
     const data = await cached("search?q=" + encodeURIComponent(query));
-    if (version === routeVersion) body.replaceChildren(songRows(data, { albums: true, empty: "No songs matched your search." }));
+    if (version === routeVersion) {
+      body.replaceChildren(songRows(data, { albums: true, empty: "No songs matched your search." }));
+      if (data.length) player.prepare(data[0], "featured");
+    }
   } catch (error) {
     if (version === routeVersion) body.replaceChildren(empty(error.message, "search", button("Retry", render, "quiet compact", "refresh")));
   }

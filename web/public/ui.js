@@ -74,18 +74,44 @@ export function setIcon(el, symbol, label) {
   }
 }
 
-export function artwork(image, song, lazy = true) {
-  const source = song?.thumbnail || (song?.id ? "https://i.ytimg.com/vi/" + song.id + "/mqdefault.jpg" : "/icon.png");
+export function artwork(image, song, lazy = true, sizes = "64px") {
+  const source = song?.thumbnail;
+  const video = song?.id ? "https://i.ytimg.com/vi/" + song.id + "/" : null;
+  const albumSize = /^(https:\/\/[^/]+\.(?:googleusercontent|ggpht)\.com\/[^?=]+)=(?:w\d+-h\d+|s\d+)([^?]*)$/;
+  const album = source?.match(albumSize);
+  const resized = (width) => album[1] + "=w" + width + "-h" + width + album[2];
+  const videoSize = video && (source?.startsWith(video) ||
+    source?.startsWith("https://i.ytimg.com/vi_webp/" + song.id + "/"));
+  const defaultVideo = video && video + "hqdefault.jpg";
+  const candidates = [...new Set((videoSize ? [defaultVideo, source, "/icon.png"] : [source, defaultVideo, "/icon.png"]).filter(Boolean))];
   image.alt = "";
   image.loading = lazy ? "lazy" : "eager";
   image.decoding = "async";
-  image.onerror = () => {
-    image.onerror = null;
-    image.classList.add("art-fallback");
-    image.src = "/icon.png";
-  };
+  image.removeAttribute("srcset");
+  image.removeAttribute("sizes");
   image.classList.remove("art-fallback");
-  image.src = source;
+  const fallback = () => {
+    const next = candidates.shift() || "/icon.png";
+    if (next === "/icon.png") {
+      image.onerror = null;
+      image.classList.add("art-fallback");
+    }
+    image.src = next;
+  };
+  image.onerror = () => {
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+    fallback();
+  };
+  if (album) {
+    image.sizes = sizes;
+    image.srcset = [96, 240, 480, 768, 1200].map((width) => resized(width) + " " + width + "w").join(", ");
+    image.src = resized(480);
+  } else if (videoSize || !source && video) {
+    image.sizes = sizes;
+    image.srcset = video + "mqdefault.jpg 320w, " + video + "hq720.jpg 1280w";
+    image.src = video + "hqdefault.jpg";
+  } else fallback();
   return image;
 }
 export const artist = (song) => song?.artists?.map(({ name }) => name).filter(Boolean).join(", ") || "Unknown artist";

@@ -10,9 +10,8 @@ const searches = new Map();
 const unplayable = new Map();
 const sources = new Map();
 const selecting = new Map();
-const warming = new Set();
 const runs = (text) => text?.simpleText ?? text?.runs?.map((part) => part.text).join("") ?? "";
-const thumb = (id) => "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
+const thumb = (id) => "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
 const seconds = (value) => /^\d+(?::\d{2})+$/.test(value)
   ? value.split(":").reduce((total, part) => total * 60 + Number(part), 0)
   : 0;
@@ -39,52 +38,72 @@ async function searchTracks(query, music) {
   return videos;
 }
 
-async function searchYouTubeMusic(query) {
+export async function musicRequest(endpoint, body, region = "IN") {
   const origin = "https://music.youtube.com";
   const version = "1.20260928.13.00";
-  const response = await fetch(origin + "/youtubei/v1/search?prettyPrint=false", {
+  const response = await fetch(origin + "/youtubei/v1/" + endpoint + "?prettyPrint=false", {
     method: "POST",
     headers: {
       "content-type": "application/json", origin, "x-youtube-client-name": "67", "x-youtube-client-version": version,
       "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
     },
     body: JSON.stringify({
-      context: { client: { clientName: "WEB_REMIX", clientVersion: version, hl: "en", gl: "IN" } },
-      query, params: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D",
+      context: { client: { clientName: "WEB_REMIX", clientVersion: version, hl: "en", gl: region } },
+      ...body,
     }),
     signal: AbortSignal.timeout(7500),
   });
-  if (!response.ok) return [];
+  if (!response.ok) throw new ApiError(502, "YouTube Music is temporarily unavailable.");
+  return (await response.json()).contents;
+}
+
+export function* musicRows(node, key) {
+  if (!node || typeof node !== "object") return;
+  if (node[key]) yield node[key];
+  for (const value of Object.values(node)) yield* musicRows(value, key);
+}
+
+export function musicRowTitle(row) {
+  return runs(row.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text);
+}
+
+export function musicRowArt(row) {
+  const images = (row.thumbnail ?? row.thumbnailRenderer)?.musicThumbnailRenderer?.thumbnail?.thumbnails ?? [];
+  return images.reduce((best, image) => !best || image.width > best.width ? image : best, null)?.url;
+}
+
+const browsePageType = (browse) => browse?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
+
+export function musicArtists(credits) {
+  return credits.flatMap(({ text, navigationEndpoint }) => {
+    const browse = navigationEndpoint?.browseEndpoint;
+    return ["MUSIC_PAGE_TYPE_ARTIST", "MUSIC_PAGE_TYPE_USER_CHANNEL"].includes(browsePageType(browse))
+      ? [{ name: text.replace(/\s+- Topic$/, ""), id: browse.browseId }] : [];
+  });
+}
+
+export function musicTracks(contents, isVideo = false) {
   const result = new Map();
-  function collect(node) {
-    if (!node || typeof node !== "object" || result.size >= 24) return;
-    const row = node.musicResponsiveListItemRenderer;
-    if (row) {
-      const id = row.playlistItemData?.videoId;
-      const [titleColumn, infoColumn] = row.flexColumns ?? [];
-      const title = runs(titleColumn?.musicResponsiveListItemFlexColumnRenderer?.text);
-      if (!isTrackId(id) || !title || result.has(id)) return;
-      const credits = infoColumn?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? [];
-      const artists = [];
-      let album;
-      for (const credit of credits) {
-        const browse = credit.navigationEndpoint?.browseEndpoint;
-        const kind = browse?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
-        if (kind === "MUSIC_PAGE_TYPE_ARTIST" || kind === "MUSIC_PAGE_TYPE_USER_CHANNEL") {
-          artists.push({ name: credit.text, id: browse.browseId });
-        } else if (kind === "MUSIC_PAGE_TYPE_ALBUM") album = { title: credit.text, id: browse.browseId };
-      }
-      const duration = [...credits.map((credit) => credit.text),
-        ...(row.fixedColumns ?? []).map((column) => runs(column.musicResponsiveListItemFixedColumnRenderer?.text))]
-        .map(seconds).find(Boolean);
-      const thumbnail = row.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.at(-1)?.url;
-      result.set(id, track({ id, title, artists, album, durationSec: duration, thumbnail: thumbnail || thumb(id) }));
-      return;
-    }
-    for (const value of Object.values(node)) collect(value);
+  for (const row of musicRows(contents, "musicResponsiveListItemRenderer")) {
+    const id = row.playlistItemData?.videoId;
+    const title = musicRowTitle(row);
+    if (!isTrackId(id) || !title || result.has(id)) continue;
+    const credits = row.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs ?? [];
+    const artists = musicArtists(credits);
+    const collection = credits.find((credit) => browsePageType(credit.navigationEndpoint?.browseEndpoint) === "MUSIC_PAGE_TYPE_ALBUM");
+    const album = collection && { title: collection.text, id: collection.navigationEndpoint.browseEndpoint.browseId };
+    if (!artists.length && isVideo && credits[0]?.text) artists.push({ name: credits[0].text });
+    const duration = [...credits.map((credit) => credit.text),
+      ...(row.fixedColumns ?? []).map((column) => runs(column.musicResponsiveListItemFixedColumnRenderer?.text))]
+      .map(seconds).find(Boolean);
+    result.set(id, track({ id, title, artists, album, durationSec: duration, thumbnail: musicRowArt(row) || thumb(id), isVideo }));
+    if (result.size >= (isVideo ? 50 : 24)) break;
   }
-  collect((await response.json()).contents);
   return [...result.values()];
+}
+
+async function searchYouTubeMusic(query) {
+  return musicTracks(await musicRequest("search", { query, params: "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D" }));
 }
 
 async function searchYouTube(query, music) {
@@ -259,15 +278,6 @@ function selectSource(id, metadata, key) {
   }).finally(() => selecting.delete(key));
   selecting.set(key, selection);
   return selection;
-}
-
-export async function prepareAudio(id, metadata) {
-  const key = sourceKey(id, metadata);
-  if (sources.get(key)?.until > Date.now()) return true;
-  if (warming.size >= 2 || warming.has(key) || selecting.has(key)) return false;
-  warming.add(key);
-  try { return Boolean(await selectSource(id, metadata, key)); }
-  finally { warming.delete(key); }
 }
 
 export async function stream(id, range, signal, metadata) {

@@ -46,6 +46,7 @@
       <details id="profile" class="profile">
         <summary aria-label="Account menu" data-symbol="profile"></summary>
         <div class="profile-menu">
+          <button id="edit-taste" type="button">Listening preferences</button>
           <a id="admin-link" href="#admin" hidden>Manage accounts</a>
           <button id="signout" type="button">Sign out</button>
         </div>
@@ -115,6 +116,17 @@
       <div id="dialog-error" role="status"></div>
       <div class="dialog-actions"><button id="cancel" type="button" class="quiet">Cancel</button><button id="save-dialog" class="accent" type="submit">Save</button></div>
     </form>
+  </dialog>
+  <dialog id="taste-dialog" class="edit-dialog taste-dialog" aria-labelledby="taste-heading" aria-describedby="taste-description">
+    <h2 id="taste-heading" tabindex="-1"></h2>
+    <p id="taste-description"></p>
+    <div id="taste-panel"></div>
+    <div id="taste-notice" role="status"></div>
+    <div class="dialog-actions">
+      <button id="taste-back" type="button" class="quiet">Back</button>
+      <button id="taste-skip" type="button" class="quiet">Skip for now</button>
+      <button id="taste-next" type="button" class="accent">Continue</button>
+    </div>
   </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>

@@ -4,6 +4,7 @@ import { normalizeLibrary, tasteSeeds } from "./state.mjs";
 import { parseLyrics } from "./lyrics.mjs";
 import { moveTrack } from "./public/ui.js";
 import { firstAudioSource } from "./music.mjs";
+import { normalizeTaste } from "./discover.mjs";
 
 const a = { id: "aaaaaaaaaaa", title: "A", artists: [{ name: "First artist" }] };
 const b = { id: "bbbbbbbbbbb", title: "B", artists: [{ name: "Second artist" }] };
@@ -30,6 +31,16 @@ test("builds recommendations from multiple devices' library and history signals"
   const taste = tasteSeeds(library, time);
   deepEqual(taste.artists, ["Second artist", "First artist"]);
   deepEqual([...taste.known], [a.id, b.id]);
+});
+
+test("keeps a skipped taste setup distinct from a new account and validates choices", () => {
+  equal(normalizeTaste(null), null);
+  deepEqual(normalizeTaste({ languages: [], genres: [], artists: [] }), { languages: [], genres: [], artists: [] });
+  deepEqual(normalizeTaste({
+    languages: ["english", "hindi", "english", "indie"],
+    genres: ["indie", "chill", "hindi"],
+    artists: [" Arijit Singh ", "Arijit Singh", "", null],
+  }), { languages: ["hindi", "english"], genres: ["indie"], artists: ["Arijit Singh"] });
 });
 
 test("rebasing a playlist move keeps tracks added by Android", () => {
