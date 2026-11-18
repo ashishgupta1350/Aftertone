@@ -3,6 +3,7 @@ import test from "node:test";
 import { normalizeLibrary, tasteSeeds } from "./state.mjs";
 import { parseLyrics } from "./lyrics.mjs";
 import { moveTrack } from "./public/ui.js";
+import { firstAudioSource } from "./music.mjs";
 
 const a = { id: "aaaaaaaaaaa", title: "A", artists: [{ name: "First artist" }] };
 const b = { id: "bbbbbbbbbbb", title: "B", artists: [{ name: "Second artist" }] };
@@ -44,4 +45,22 @@ test("parses lyric offsets, repeated lines, and intentional gaps", () => {
     { at: 0.25, text: "Intro" }, { at: 2.35, text: "Chorus" },
     { at: 3.25, text: "" }, { at: 8.35, text: "Chorus" },
   ]);
+});
+
+test("a matching alternate can start while the primary lookup is still pending", async () => {
+  let releaseAlternate;
+  const alternate = new Promise((resolve) => { releaseAlternate = resolve; });
+  let primarySignal;
+  const result = await firstAudioSource(() => alternate, (signal) => {
+    primarySignal = signal;
+    releaseAlternate("alternate");
+    return new Promise((_, reject) => signal.addEventListener("abort", reject, { once: true }));
+  }, 0);
+  equal(result, "alternate");
+  equal(primarySignal.aborted, true);
+});
+
+test("an immediate alternate miss starts the primary without waiting for the hedge", async () => {
+  equal(await firstAudioSource(async () => null, async () => "primary", 10000), "primary");
+  equal(await firstAudioSource(async () => null, async () => null), null);
 });

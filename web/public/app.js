@@ -261,13 +261,24 @@ function more(song, options = {}) {
   return details;
 }
 
+function prepareOnIntent(button, song) {
+  let timer;
+  button.addEventListener("pointerenter", (event) => {
+    if (event.pointerType !== "touch") timer = setTimeout(() => player.prepare(song), 180);
+  });
+  button.addEventListener("pointerleave", () => clearTimeout(timer));
+  button.addEventListener("click", () => clearTimeout(timer));
+  button.addEventListener("focus", () => { if (button.matches(":focus-visible")) player.prepare(song); });
+  return button;
+}
+
 function trackCover(song, tracks, eager = false) {
   const play = button("", () => player.play(song, tracks), "track-cover");
   play.setAttribute("aria-label", "Play " + song.title);
   const frame = node("span", "", "cover-play");
   frame.append(icon("play"));
   play.append(artwork(node("img"), song, !eager), frame);
-  return play;
+  return prepareOnIntent(play, song);
 }
 function likeButton(song) {
   const on = liked(song);
@@ -281,7 +292,7 @@ function songGrid(songs) {
     const card = node("article", "", "song-card");
     const caption = node("div", "", "song-caption");
     const copy = node("div", "", "track-copy");
-    const title = button(song.title, () => player.play(song, songs), "track-title");
+    const title = prepareOnIntent(button(song.title, () => player.play(song, songs), "track-title"), song);
     title.title = song.title;
     copy.append(title, node("span", artist(song)));
     caption.append(copy, more(song));
@@ -296,7 +307,7 @@ function songRows(songs, options = {}) {
   songs.slice(0, options.limit).forEach((song, i) => {
     const row = node("li", "", "song-row");
     const copy = node("div", "", "track-copy");
-    const title = button(song.title, () => player.play(song, songs), "track-title");
+    const title = prepareOnIntent(button(song.title, () => player.play(song, songs), "track-title"), song);
     title.title = song.title;
     copy.append(title, node("span", artist(song)));
     const tools = node("div", "", "row-actions");
@@ -353,7 +364,7 @@ function featured(song, songs, label) {
   const copy = node("div", "", "feature-copy");
   copy.append(node("p", label, "eyebrow"), node("h2", song.title), node("p", artist(song), "feature-artist"));
   const actions = node("div", "", "inline-actions");
-  actions.append(button("Play now", () => player.play(song, songs), "accent", "play"),
+  actions.append(prepareOnIntent(button("Play now", () => player.play(song, songs), "accent", "play"), song),
     iconButton("queue", "Add to queue", () => player.add(song), "glass-button"));
   copy.append(actions);
   banner.append(background, copy, artwork(node("img", "", "feature-art"), song, false));

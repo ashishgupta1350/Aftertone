@@ -8,7 +8,9 @@ const cache = new Map();
 const pending = new Map();
 const searches = new Map();
 const unplayable = new Map();
-const selectedAlternates = new Map();
+const sources = new Map();
+const selecting = new Map();
+const warming = new Set();
 const runs = (text) => text?.simpleText ?? text?.runs?.map((part) => part.text).join("") ?? "";
 const thumb = (id) => "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg";
 const seconds = (value) => /^\d+(?::\d{2})+$/.test(value)
@@ -181,54 +183,114 @@ async function matchAlternate({ title, artist, durationSec }, signal) {
   return null;
 }
 
-async function youtubeAudio(id, range, signal) {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await upstreamAudio(await resolve(id), range, signal);
-    const audio = audioResponse(response);
-    if (audio) return audio;
+const sourceKey = (id, metadata) => JSON.stringify([id, metadata?.title, metadata?.artist, metadata?.durationSec]);
+
+async function probe(url, provider, signal) {
+  if (!url || signal.aborted) return null;
+  const response = await upstreamAudio(url, "bytes=0-1023", AbortSignal.any([signal, AbortSignal.timeout(4000)]));
+  const valid = response.ok && response.headers.get("content-type")?.startsWith("audio/");
+  // Read just the probe when the CDN honors Range. Never download a complete song speculatively.
+  if (valid && response.status === 206 && Number(response.headers.get("content-length")) === 1024) {
+    await response.arrayBuffer();
+  } else {
     await response.body?.cancel();
-    if (response.status === 416) return new Response(null, { status: 416, headers: { "content-range": response.headers.get("content-range") ?? "bytes */*" } });
-    if (![403, 410].includes(response.status)) break;
-    cache.delete(id);
   }
+  return valid ? { url, provider } : null;
+}
+
+export async function firstAudioSource(alternateSource, primarySource, delay = 220) {
+  const work = new AbortController();
+  let startPrimary;
+  const ready = new Promise((done) => { startPrimary = done; });
+  const timer = setTimeout(startPrimary, delay);
+  function requireSource(source) {
+    if (!source) throw new Error("Audio source unavailable");
+    return source;
+  }
+  const alternateResult = Promise.resolve().then(() => alternateSource(work.signal)).then(requireSource);
+  void alternateResult.catch(startPrimary);
+  const primaryResult = ready.then(() => work.signal.aborted ? null : primarySource(work.signal)).then(requireSource);
+  try {
+    return await Promise.any([alternateResult, primaryResult]);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    work.abort();
+    startPrimary();
+  }
+}
+
+async function primarySource(id, signal) {
+  if (unplayable.get(id) > Date.now()) return null;
+  const previous = cache.get(id);
+  try {
+    const url = await resolve(id);
+    if (signal.aborted) return null;
+    const checked = await probe(url, "youtube", signal);
+    if (checked) return checked;
+    if (cache.get(id)?.url === url) cache.delete(id);
+    if (!signal.aborted && previous?.url === url) {
+      const refreshed = await probe(await resolve(id), "youtube", signal);
+      if (refreshed) return refreshed;
+    }
+  } catch (error) {
+    if (signal.aborted || error.status === 503) return null;
+  }
+  if (unplayable.size >= 128) unplayable.delete(unplayable.keys().next().value);
+  unplayable.set(id, Date.now() + 120000);
   return null;
+}
+
+function selectSource(id, metadata, key) {
+  const saved = sources.get(key);
+  if (saved?.until > Date.now()) return Promise.resolve(saved);
+  if (selecting.has(key)) return selecting.get(key);
+  const selection = firstAudioSource(
+    async (signal) => metadata ? probe(await matchAlternate(metadata, signal), "alternate", signal) : null,
+    (signal) => primarySource(id, signal),
+    cache.get(id)?.until > Date.now() ? 0 : 220,
+  ).then((source) => {
+    if (!source) return null;
+    if (sources.size >= 128) sources.delete(sources.keys().next().value);
+    const entry = { ...source, until: Date.now() + 10 * 60000 };
+    sources.set(key, entry);
+    return entry;
+  }).finally(() => selecting.delete(key));
+  selecting.set(key, selection);
+  return selection;
+}
+
+export async function prepareAudio(id, metadata) {
+  const key = sourceKey(id, metadata);
+  if (sources.get(key)?.until > Date.now()) return true;
+  if (warming.size >= 2 || warming.has(key) || selecting.has(key)) return false;
+  warming.add(key);
+  try { return Boolean(await selectSource(id, metadata, key)); }
+  finally { warming.delete(key); }
 }
 
 export async function stream(id, range, signal, metadata) {
   if (!/^bytes=\d{1,12}-\d{0,12}$/.test(range)) throw new ApiError(416, "Invalid audio range.");
-  const alternateKey = JSON.stringify([id, metadata?.title, metadata?.artist, metadata?.durationSec]);
-  const cachedAlt = selectedAlternates.get(alternateKey);
-  if (cachedAlt?.until > Date.now()) {
-    const response = await upstreamAudio(cachedAlt.url, range, signal).catch(() => null);
-    const audio = response && audioResponse(response);
-    if (audio) return audio;
-    if (response?.status === 416) {
-      await response.body?.cancel();
-      return new Response(null, { status: 416, headers: { "content-range": response.headers.get("content-range") ?? "bytes */*" } });
-    }
-    await response?.body?.cancel();
-    selectedAlternates.delete(alternateKey);
+  const key = sourceKey(id, metadata);
+  const started = performance.now();
+  const source = await selectSource(id, metadata, key);
+  const selected = performance.now();
+  if (!source || signal.aborted) throw new ApiError(502, "This track is temporarily unavailable.");
+  const response = await upstreamAudio(source.url, range, signal).catch(() => null);
+  const audio = response && audioResponse(response);
+  if (audio) {
+    audio.headers.set("Server-Timing", "source;dur=" + Math.round(selected - started) + ", upstream;dur=" + Math.round(performance.now() - selected));
+    return audio;
   }
-  if (!(unplayable.get(id) > Date.now())) {
-    const primary = await youtubeAudio(id, range, signal).catch(() => null);
-    if (primary) return primary;
-    if (!signal.aborted) {
-      if (unplayable.size >= 128) unplayable.delete(unplayable.keys().next().value);
-      unplayable.set(id, Date.now() + 120000);
-    }
+  await response?.body?.cancel();
+  if (response?.status === 416) {
+    return new Response(null, { status: 416, headers: { "content-range": response.headers.get("content-range") ?? "bytes */*" } });
   }
-  if (!signal.aborted && metadata) {
-    const source = await matchAlternate(metadata, signal).catch(() => null);
-    if (source) {
-      const response = await upstreamAudio(source, range, signal);
-      const audio = audioResponse(response);
-      if (audio) {
-        if (selectedAlternates.size >= 64) selectedAlternates.delete(selectedAlternates.keys().next().value);
-        selectedAlternates.set(alternateKey, { url: source, until: Date.now() + 15 * 60000 });
-        return audio;
-      }
-      await response.body?.cancel();
-    }
+  // The browser can retry with a fresh source. Never switch encodings within this ranged response.
+  if (!signal.aborted && sources.get(key) === source) {
+    sources.delete(key);
+    if (source.provider === "youtube" && cache.get(id)?.url === source.url) cache.delete(id);
   }
   throw new ApiError(502, "This track is temporarily unavailable.");
 }

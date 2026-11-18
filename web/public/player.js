@@ -21,6 +21,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   const scrubbers = [];
   const volumeControls = [];
   const likeControls = [];
+  const prepared = new Map();
   let owner = null;
   let queue = [];
   let index = -1;
@@ -39,11 +40,33 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   let lastSaved = 0;
   let lastPersist = 0;
   let failed = false;
+  let waiting = false;
 
   const current = () => queue[index];
   const mediaTime = () => startAt ?? (audio.hasAttribute("src") ? audio.currentTime : resumePosition);
   const stateKey = () => "aftertone.player." + owner;
   const totalTime = () => Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number(current()?.durationSec) || 0;
+  const streamParams = (song) => new URLSearchParams({
+    id: song.id, title: song.title, artist: song.artists?.[0]?.name ?? "", duration: song.durationSec || 0,
+  }).toString();
+
+  function prepare(song) {
+    if (!owner || !song || document.hidden || navigator.connection?.saveData) return;
+    const key = streamParams(song);
+    const until = Date.now() + 60000;
+    if (prepared.get(key) > Date.now()) return;
+    if (prepared.size >= 32) prepared.delete(prepared.keys().next().value);
+    prepared.set(key, until);
+    const forget = () => { if (prepared.get(key) === until) prepared.delete(key); };
+    fetch("/api/prepare?" + key).then((result) => { if (!result.ok) forget(); }).catch(forget);
+  }
+
+  function setWaiting(value) {
+    if (waiting === value) return;
+    waiting = value;
+    if (current()) $("artist").textContent = value ? "Loading audio…" : artist(current());
+    if (!failed) showMessage(value ? "Loading audio…" : "");
+  }
 
   function save() {
     if (!owner || !current()) return;
@@ -73,6 +96,8 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     shuffle = false;
     repeat = "off";
     failed = false;
+    waiting = false;
+    prepared.clear();
     activation = null;
     audio.pause();
     audio.removeAttribute("src");
@@ -127,6 +152,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     activation = null;
     listened = lastPosition = lastSaved = 0;
     failed = false;
+    waiting = false;
     showMessage("");
     lyricKey = null;
     lyricRows = [];
@@ -142,17 +168,19 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     if (!owner || !song) return;
     if (failed || !audio.hasAttribute("src")) {
       if (failed) resumePosition = mediaTime();
-      startAt = resumePosition;
+      startAt = resumePosition > 0 ? resumePosition : null;
       failed = false;
       showMessage("");
       activation ||= Date.now();
-      audio.src = "/api/stream?" + new URLSearchParams({
-        id: song.id, title: song.title, artist: song.artists?.[0]?.name ?? "", duration: song.durationSec || 0,
-      });
+      audio.src = "/api/stream?" + streamParams(song);
     }
+    if (audio.readyState < 3) setWaiting(true);
     const selected = activation;
     audio.play().catch((error) => {
-      if (activation === selected && error.name === "NotAllowedError") say("Press play to start listening.");
+      if (activation === selected && error.name === "NotAllowedError") {
+        setWaiting(false);
+        say("Press play to start listening.");
+      }
     });
   }
 
@@ -519,12 +547,15 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     }
   };
   audio.onplay = paintControls;
-  audio.onpause = () => { listen(true); paintControls(); save(); };
+  audio.onwaiting = () => { if (!audio.paused && !failed && current()) setWaiting(true); };
+  audio.onplaying = () => { setWaiting(false); prepare(queue[index + 1]); };
+  audio.onpause = () => { if (audio.paused) setWaiting(false); listen(true); paintControls(); save(); };
   audio.onended = () => { listen(true); step(1, true); paintControls(); };
   audio.onvolumechange = paintControls;
   audio.onerror = () => {
     if (!owner || !current() || !audio.hasAttribute("src")) return;
     failed = true;
+    setWaiting(false);
     showMessage("This track couldn’t play.", true);
     paintControls();
     say("This track couldn’t play. Press play to retry.");
@@ -539,5 +570,5 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       try { navigator.mediaSession.setActionHandler(action, fn); } catch { /* Optional browser support. */ }
     }
   }
-  return { play, add, restore, reset, paintLike, save, toggle, current, listen };
+  return { play, add, restore, reset, paintLike, save, toggle, current, listen, prepare };
 }
