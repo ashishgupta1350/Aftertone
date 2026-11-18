@@ -1,47 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-type="software" data-radius="round" data-motion="quiet">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#141211">
+  <meta name="theme-color" content="#111417">
+  <meta name="page-type" content="software">
+  <meta name="site-kind" content="software">
+  <meta name="description" content="Listen to your Aftertone library, discover music, and follow along with lyrics.">
+  <meta property="og:title" content="Aftertone">
   <title>Aftertone</title>
   <link rel="icon" href="/icon.png">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" type="module"></script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#home"><img src="/icon.png" alt="" width="32" height="32">Aftertone</a>
-    <form id="search" hidden role="search"><label class="sr" for="query">Search music</label><input id="query" type="search" placeholder="Search songs, artists, albums" maxlength="160" required><button type="submit" aria-label="Search">⌕</button></form>
-    <button id="signout" hidden type="button" class="quiet">Sign out</button>
-  </header>
-  <div id="shell" class="shell" hidden>
-    <nav id="nav" aria-label="Library">
-      <a href="#home">Home</a><a href="#explore">Explore</a><a href="#likes">Liked songs</a><a href="#playlists">Playlists</a><a href="#history">History</a><a id="admin-link" href="#admin" hidden>Accounts</a>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <aside id="sidebar" class="sidebar" hidden>
+    <a class="brand" href="#home"><img src="/icon.png" alt="" width="36" height="36">Aftertone</a>
+    <nav id="nav" class="primary-nav" aria-label="Main navigation">
+      <a href="#home" data-symbol="home">Home</a>
+      <a href="#explore" data-symbol="explore">Explore</a>
+      <a href="#search" data-symbol="search">Search</a>
+      <a href="#library" data-symbol="library">Library</a>
     </nav>
-    <main id="main" tabindex="-1"></main>
-  </div>
+    <div class="sidebar-library">
+      <div class="side-heading">Your library <button id="new-sidebar" type="button" class="icon-btn" aria-label="New playlist" data-symbol="plus"></button></div>
+      <a class="side-link" href="#likes" data-symbol="heart">Liked songs</a>
+      <a class="side-link" href="#history" data-symbol="history">Listening history</a>
+      <div id="side-playlists" class="side-playlists"></div>
+    </div>
+  </aside>
+
+  <header id="top" class="top" hidden>
+    <a class="mobile-brand brand" href="#home"><img src="/icon.png" alt="" width="32" height="32">Aftertone</a>
+    <div class="top-tools">
+      <form id="search" class="search-form" role="search">
+        <button type="submit" class="icon-btn" aria-label="Search" data-symbol="search"></button>
+        <label class="sr" for="query">Search songs, artists, albums</label>
+        <input id="query" type="search" placeholder="Search songs, artists, albums" maxlength="160" required>
+        <kbd class="search-shortcut" aria-hidden="true">/</kbd>
+      </form>
+      <details id="profile" class="profile">
+        <summary aria-label="Account menu" data-symbol="profile"></summary>
+        <div class="profile-menu">
+          <a id="admin-link" href="#admin" hidden>Manage accounts</a>
+          <button id="signout" type="button">Sign out</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main id="main" class="main" tabindex="-1" hidden></main>
   <main id="login" class="login" hidden>
+    <div class="auth-brand brand"><img src="/icon.png" alt="" width="40" height="40">Aftertone</div>
     <form id="credentials" class="auth">
-      <img src="/icon.png" alt="" width="56" height="56">
       <h1 id="auth-title">Sign in to Aftertone</h1>
-      <p>Your music, playlists, and recommendations follow you between Android and the web.</p>
+      <p>Pick up where you left off on Android.</p>
       <label for="username">Email, phone number, or username</label>
       <input id="username" name="username" autocomplete="username" required maxlength="200">
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128">
       <button id="submit" class="accent" type="submit">Sign in</button>
       <button id="change-mode" class="quiet" type="button">Create an account</button>
-      <p id="auth-error" role="status"></p>
+      <div id="auth-error" role="status"></div>
     </form>
   </main>
-  <footer id="player" class="player" hidden>
-    <div class="now"><img id="art" alt="" width="44" height="44"><div><strong id="song"></strong><span id="artist"></span></div></div>
-    <div class="playback"><button id="previous" type="button" aria-label="Previous">⏮</button><audio id="audio" controls preload="none"></audio><button id="next" type="button" aria-label="Next">⏭</button></div>
-    <div><button id="like-now" type="button" aria-label="Like song" aria-pressed="false">♡</button><button id="add-now" type="button" aria-label="Add to playlist">＋</button></div>
+
+  <audio id="audio" preload="none"></audio>
+  <footer id="player" class="player" aria-label="Playback controls" hidden>
+    <button id="open-player" class="now" type="button" aria-label="Open Now Playing">
+      <img id="art" alt="" width="52" height="52"><span class="now-copy"><strong id="song"></strong><span id="artist"></span></span>
+    </button>
+    <div class="transport">
+      <div id="mini-controls" class="transport-buttons"></div>
+      <div id="mini-progress" class="progress"></div>
+    </div>
+    <div id="mini-tools" class="player-tools"></div>
   </footer>
-  <div id="toast" role="status" hidden></div>
-  <dialog id="dialog"><form id="playlist-form"><h2 id="dialog-title">Playlist</h2><div id="playlist-fields"></div><div class="dialog-actions"><button id="cancel" type="button" class="quiet">Cancel</button><button class="accent" type="submit">Save</button></div></form></dialog>
+
+  <dialog id="now-playing" class="now-playing" aria-labelledby="playing-title">
+    <div class="playing-background" aria-hidden="true"><img id="playing-glow" alt=""></div>
+    <div class="playing-inner">
+      <header class="playing-top">
+        <button id="close-player" class="icon-btn" type="button" aria-label="Close Now Playing" data-symbol="down"></button>
+        <h2 id="playing-title">Now playing</h2>
+      </header>
+      <div class="playing-grid">
+        <section class="playing-track" aria-label="Current track">
+          <img id="playing-art" class="playing-art" alt="">
+          <div class="playing-meta"><div><h3 id="playing-song"></h3><p id="playing-artist"></p></div><div id="playing-actions" class="inline-actions"></div></div>
+          <div id="playing-progress" class="progress"></div>
+          <div id="playing-controls" class="transport-buttons playing-controls"></div>
+          <div id="playback-message" class="playback-message" hidden></div>
+        </section>
+        <section class="playing-side" aria-label="Track details">
+          <div class="segmented" aria-label="Player panel">
+            <button id="lyrics-tab" type="button" aria-controls="lyrics-panel">Lyrics</button>
+            <button id="queue-tab" type="button" aria-controls="queue-panel">Up Next</button>
+          </div>
+          <div id="lyrics-panel" class="lyrics-panel"></div>
+          <div id="queue-panel" class="queue-panel" hidden></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="dialog" class="edit-dialog" aria-labelledby="dialog-title">
+    <form id="playlist-form">
+      <h2 id="dialog-title"></h2>
+      <div id="playlist-fields"></div>
+      <div id="dialog-error" role="status"></div>
+      <div class="dialog-actions"><button id="cancel" type="button" class="quiet">Cancel</button><button id="save-dialog" class="accent" type="submit">Save</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

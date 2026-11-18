@@ -2,8 +2,9 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { ApiError, createFirebase } from "./firebase.mjs";
-import { emptyLibrary, isTrackId, normalizeLibrary, tasteSeeds } from "./state.mjs";
+import { emptyLibrary, isTrackId, normalizeLibrary, tasteSeeds, trackIdentity } from "./state.mjs";
 import { search, stream } from "./music.mjs";
+import { lyrics } from "./lyrics.mjs";
 
 const firebase = createFirebase();
 const port = Number(process.env.PORT || 4371);
@@ -12,6 +13,8 @@ const secureCookies = !process.env.FIREBASE_AUTH_EMULATOR_HOST;
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
+  ["/player.js", ["player.js", "text/javascript; charset=utf-8"]],
+  ["/ui.js", ["ui.js", "text/javascript; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
   ["/icon.png", ["icon.png", "image/png"]],
 ]);
@@ -65,22 +68,46 @@ function reply(res, response) {
   body.pipe(res);
 }
 
-async function recommend(library) {
-  const { artists, known } = tasteSeeds(library);
-  if (!artists.length) return [];
+const topics = new Map(Object.entries({
+  hindi: "Hindi songs", english: "English pop songs", indie: "indie songs",
+  pop: "pop songs", rock: "rock songs", hiphop: "hip hop songs",
+  chill: "chill songs", workout: "workout music", focus: "focus instrumental music",
+}));
+const languageQueries = new Map([
+  ["hindi", ["Hindi songs", "Bollywood Hindi hits", "Hindi film songs"]],
+  ["english", ["English pop songs", "English pop music hits", "English indie songs"]],
+]);
+
+async function recommend(library, topicId, rotation) {
+  const { artists, known, knownTracks } = tasteSeeds(library);
+  const topic = topics.get(topicId);
+  const language = languageQueries.get(topicId);
   const day = Math.floor(Date.now() / 86400000);
-  const discovery = artists.slice(2, 12);
-  const seeds = [...artists.slice(0, 2), ...discovery.slice(day % Math.max(1, discovery.length)).concat(discovery).slice(0, 3)];
-  const groups = await Promise.allSettled(seeds.map((artist) => search(artist + " songs")));
+  const discovery = artists.slice(2, 16);
+  const start = (day + rotation) % Math.max(1, discovery.length);
+  const rotated = discovery.slice(start).concat(discovery.slice(0, start));
+  const seeds = [...artists.slice(0, 2), ...rotated.slice(0, topic ? 1 : 3)];
+  const queries = language ?? [...(topic ? [topic] : []), ...seeds.map((artist) => artist + " " + (topic || "songs"))];
+  if (!queries.length) return [];
+  const groups = await Promise.allSettled(queries.map((query) => search(query)));
   const lists = groups.map((group) => group.status === "fulfilled" ? group.value : []);
+  if (groups.every((group) => group.status === "rejected")) throw new ApiError(502, "Discovery is temporarily unavailable.");
   const songs = [];
   for (let index = 0; index < 18 && songs.length < 24; index++) {
     for (const list of lists) {
       const song = list[index];
       if (!song || known.has(song.id)) continue;
+      const identity = trackIdentity(song);
+      if (identity && knownTracks.has(identity)) continue;
+      if (identity) knownTracks.add(identity);
       known.add(song.id);
       songs.push(song);
     }
+  }
+  if (language) {
+    const favored = new Set(artists.slice(0, 12).map((artist) => artist.toLocaleLowerCase("en-US")));
+    const taste = (song) => song.artists.some(({ name }) => favored.has(name.toLocaleLowerCase("en-US"))) ? 1 : 0;
+    songs.sort((a, b) => taste(b) - taste(a));
   }
   return songs.slice(0, 24);
 }
@@ -167,7 +194,20 @@ async function route(req, res, signal) {
     const saved = libraryOf(result.snapshot.val());
     return Response.json(saved, { status: result.committed && saved.revision === revision + 1 ? 200 : 409 });
   }
-  if (get && path === "/api/recommendations") return Response.json(await recommend(libraryOf((await state.get()).val()).library));
+  if (get && path === "/api/recommendations") {
+    const requested = query.get("topic");
+    if (requested && !topics.has(requested)) throw new ApiError(400, "Unknown discovery topic.");
+    const rotation = Math.min(99, Math.max(0, Math.trunc(Number(query.get("rotation")) || 0)));
+    return Response.json(await recommend(libraryOf((await state.get()).val()).library, requested, rotation));
+  }
+  if (get && path === "/api/lyrics") {
+    const title = query.get("title")?.trim().slice(0, 220);
+    const artist = query.get("artist")?.trim().slice(0, 160);
+    const album = query.get("album")?.trim().slice(0, 180);
+    const duration = Math.min(86400, Math.max(0, Math.round(Number(query.get("duration")) || 0)));
+    if (!title || !artist) throw new ApiError(400, "Track and artist are required.");
+    return Response.json(await lyrics(title, artist, album, duration));
+  }
   if (get && path === "/api/search") {
     const q = query.get("q")?.trim().slice(0, 160);
     if (!q) throw new ApiError(400, "Enter a song or artist.");

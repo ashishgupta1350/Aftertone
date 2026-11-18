@@ -1,6 +1,8 @@
 import { deepEqual, equal } from "node:assert/strict";
 import test from "node:test";
 import { normalizeLibrary, tasteSeeds } from "./state.mjs";
+import { parseLyrics } from "./lyrics.mjs";
+import { moveTrack } from "./public/ui.js";
 
 const a = { id: "aaaaaaaaaaa", title: "A", artists: [{ name: "First artist" }] };
 const b = { id: "bbbbbbbbbbb", title: "B", artists: [{ name: "Second artist" }] };
@@ -27,4 +29,19 @@ test("builds recommendations from multiple devices' library and history signals"
   const taste = tasteSeeds(library, time);
   deepEqual(taste.artists, ["Second artist", "First artist"]);
   deepEqual([...taste.known], [a.id, b.id]);
+});
+
+test("rebasing a playlist move keeps tracks added by Android", () => {
+  const tracks = [a, c, b];
+  moveTrack(tracks, a.id, b.id, 1);
+  deepEqual(tracks.map(({ id }) => id), [c.id, b.id, a.id]);
+  moveTrack(tracks, a.id, "removed0000", -1);
+  deepEqual(tracks.map(({ id }) => id), [c.id, b.id, a.id]);
+});
+
+test("parses lyric offsets, repeated lines, and intentional gaps", () => {
+  deepEqual(parseLyrics("[offset:+250]\n[00:02.10][00:08.1]Chorus\n[00:03.000]\n[00:00.0]Intro"), [
+    { at: 0.25, text: "Intro" }, { at: 2.35, text: "Chorus" },
+    { at: 3.25, text: "" }, { at: 8.35, text: "Chorus" },
+  ]);
 });

@@ -56,11 +56,20 @@ export function normalizeLibrary(input) {
   };
 }
 
+export function trackIdentity(song) {
+  const normalize = (value) => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase("en-US");
+  const artist = song.artists?.[0]?.name;
+  return artist && artist !== "Unknown artist" ? normalize(song.title) + "\n" + normalize(artist) : "";
+}
+
 export function tasteSeeds(library, now = Date.now()) {
   const scores = new Map();
   const known = new Set();
+  const knownTracks = new Set();
   function add(song, score) {
     known.add(song.id);
+    const identity = trackIdentity(song);
+    if (identity) knownTracks.add(identity);
     const artist = song.artists?.[0]?.name;
     if (!artist || artist === "Unknown artist") return;
     const key = artist.toLocaleLowerCase("en-US");
@@ -72,5 +81,5 @@ export function tasteSeeds(library, now = Date.now()) {
   library.playlists.forEach(({ songs }) => songs.forEach((song) => add(song, 0.65)));
   library.plays.filter(({ excluded }) => !excluded).slice(0, 400).forEach(({ song, at }) =>
     add(song, 2.5 / (1 + Math.max(now - at, 0) / (14 * 86400000))));
-  return { artists: [...scores.values()].sort((a, b) => b.score - a.score).map(({ artist }) => artist), known };
+  return { artists: [...scores.values()].sort((a, b) => b.score - a.score).map(({ artist }) => artist), known, knownTracks };
 }
