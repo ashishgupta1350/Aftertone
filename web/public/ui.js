@@ -83,15 +83,19 @@ export function artwork(image, song, lazy = true, sizes = "64px") {
   const videoSize = video && (source?.startsWith(video) ||
     source?.startsWith("https://i.ytimg.com/vi_webp/" + song.id + "/"));
   const defaultVideo = video && video + "hqdefault.jpg";
-  const candidates = [...new Set((videoSize ? [defaultVideo, source, "/icon.png"] : [source, defaultVideo, "/icon.png"]).filter(Boolean))];
+  const albumFallbacks = album ? [544, 480, 226].map(resized) : [];
+  const videoFallbacks = videoSize ? [video + "sddefault.jpg", defaultVideo] : [];
+  const candidates = [...new Set([...albumFallbacks, ...videoFallbacks, source, defaultVideo, "/icon.png"].filter(Boolean))];
   image.alt = "";
   image.loading = lazy ? "lazy" : "eager";
   image.decoding = "async";
   image.removeAttribute("srcset");
   image.removeAttribute("sizes");
   image.classList.remove("art-fallback");
-  const fallback = () => {
-    const next = candidates.shift() || "/icon.png";
+  const fallback = (failed) => {
+    let next = candidates.shift();
+    while (next && next === failed) next = candidates.shift();
+    next ||= "/icon.png";
     if (next === "/icon.png") {
       image.onerror = null;
       image.classList.add("art-fallback");
@@ -99,14 +103,16 @@ export function artwork(image, song, lazy = true, sizes = "64px") {
     image.src = next;
   };
   image.onerror = () => {
+    const failed = image.currentSrc || image.src;
     image.removeAttribute("srcset");
     image.removeAttribute("sizes");
-    fallback();
+    fallback(failed);
   };
   if (album) {
     image.sizes = sizes;
-    image.srcset = [96, 240, 480, 768, 1200].map((width) => resized(width) + " " + width + "w").join(", ");
-    image.src = resized(480);
+    // Include YouTube Music's native cover sizes. Some intermediate sizes fail on valid covers.
+    image.srcset = [60, 120, 226, 544, 1200].map((width) => resized(width) + " " + width + "w").join(", ");
+    image.src = resized(544);
   } else if (videoSize || !source && video) {
     image.sizes = sizes;
     image.srcset = video + "mqdefault.jpg 320w, " + video + "hq720.jpg 1280w";

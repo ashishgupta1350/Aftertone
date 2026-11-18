@@ -178,7 +178,15 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     panel.hidden = !message;
     panel.replaceChildren();
     if (message) panel.append(node("span", message));
-    if (retry) panel.append(button("Retry", () => start(), "quiet compact", "refresh"));
+    if (retry) {
+      const actions = node("div", "", "playback-error-actions");
+      const original = node("a", "Open on YouTube", "quiet compact");
+      original.href = "https://www.youtube.com/watch?" + new URLSearchParams({ v: current().id });
+      original.target = "_blank";
+      original.rel = "noopener noreferrer";
+      actions.append(button("Retry", () => start(), "quiet compact", "refresh"), original);
+      panel.append(actions);
+    }
   }
 
   function select(position, autoplay = true, offset = 0) {
@@ -602,9 +610,9 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       if (!owner || !current() || !audio.hasAttribute("src")) return;
       failed = true;
       setWaiting(false);
-      showMessage("This track couldn’t play.", true);
+      showMessage("No audio source could start for this track.", true);
       paintControls();
-      say("This track couldn’t play. Press play to retry.");
+      say("This track couldn’t play. Open Now Playing for options.");
       api("me").catch(() => {});
     },
   };
