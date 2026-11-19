@@ -42,6 +42,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   let lastPersist = 0;
   let failed = false;
   let waiting = false;
+  let playRequested = false;
   let recoverySkips = 0;
   let resumedAfterError = false;
 
@@ -143,6 +144,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     shuffle = false;
     repeat = "off";
     failed = false;
+    playRequested = false;
     setWaiting(false);
     recoverySkips = 0;
     resumedAfterError = false;
@@ -187,6 +189,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     if (!recovering) recoverySkips = 0;
     resumedAfterError = false;
     index = position;
+    playRequested = autoplay;
     startAt = null;
     resumePosition = offset;
     activation = null;
@@ -205,6 +208,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   function start() {
     const song = current();
     if (!owner || !song) return;
+    playRequested = true;
     if (failed || !audio.hasAttribute("src")) {
       if (failed) resumePosition = mediaTime();
       startAt = resumePosition > 0 ? resumePosition : null;
@@ -219,6 +223,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     const selected = activation;
     audio.play().catch((error) => {
       if (activation === selected && error.name === "NotAllowedError") {
+        playRequested = false;
         setWaiting(false);
         say("Press play to start listening.");
       }
@@ -281,8 +286,13 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     save();
   }
 
+  function pause() {
+    playRequested = false;
+    audio.pause();
+  }
+
   function toggle() {
-    if (!audio.paused && !audio.ended && !failed) audio.pause();
+    if (!audio.paused && !audio.ended && !failed) pause();
     else {
       if (audio.ended) seek(0);
       start();
@@ -601,7 +611,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       if (!owner || failed || !current() || !audio.hasAttribute("src")) return;
       failed = true;
       setWaiting(false);
-      if (navigator.onLine !== false) {
+      if (playRequested && navigator.onLine !== false) {
         if (audio.currentTime > 0.25 && !resumedAfterError) {
           resumedAfterError = true;
           start();
@@ -628,7 +638,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   window.addEventListener("pagehide", save);
 
   if (navigator.mediaSession) {
-    const bindings = { play: start, pause: () => audio.pause(), nexttrack: () => step(1),
+    const bindings = { play: start, pause, nexttrack: () => step(1),
       previoustrack: () => step(-1), seekto: (event) => seek(event.seekTime) };
     for (const [action, fn] of Object.entries(bindings)) {
       try { navigator.mediaSession.setActionHandler(action, fn); } catch { /* Optional browser support. */ }
