@@ -122,7 +122,7 @@ async function searchYouTube(query, music) {
       const duration = seconds(runs(row.lengthText));
       const artist = runs(row.ownerText ?? row.shortBylineText).replace(/\s+- Topic$/, "");
       results.set(row.videoId, track({ id: row.videoId, title: runs(row.title),
-        artists: artist ? [{ name: artist }] : [], durationSec: duration, thumbnail: thumb(row.videoId) }));
+        artists: artist ? [{ name: artist }] : [], durationSec: duration, thumbnail: thumb(row.videoId), isVideo: true }));
     }
     for (const child of Object.values(node)) collect(child);
   }
@@ -172,12 +172,43 @@ function audioResponse(response) {
 }
 
 const alternate = new Map();
-async function matchAlternate({ title, artist, durationSec }, signal) {
+const recordingKey = (value) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function recordingTitle(value) {
+  const text = value.replace(/&(?:quot|#34);/gi, '"').replace(/&(?:apos|#39);/gi, "'").replace(/&amp;/gi, "&").trim();
+  const soundtrack = text.match(/^(.*?)\s*[([]\s*from\s+(.+?)[)\]]$/i);
+  return { title: soundtrack?.[1] ?? text, film: recordingKey(soundtrack?.[2] ?? "") };
+}
+
+export function sameRecordingTitle(left, right) {
+  const a = recordingTitle(left);
+  const b = recordingTitle(right);
+  return recordingKey(a.title) === recordingKey(b.title) && (!a.film || !b.film || a.film === b.film);
+}
+
+export function matchesAlternateTrack(result, { title, artists, durationSec }) {
+  return result.type === "song" && !result.rights && typeof result.name === "string" &&
+    Number(result.duration) > 0 && Math.abs(Number(result.duration) - durationSec) <= 10 &&
+    sameRecordingTitle(result.name, title) &&
+    [...(result.artists?.primary ?? []), ...(result.artists?.featured ?? [])]
+      .some(({ name }) => typeof name === "string" && artists.some((artist) => recordingKey(artist) === recordingKey(name)));
+}
+
+export async function audioVersion(id, { title, artist, artists, durationSec }) {
   if (!title || !artist || !durationSec) return null;
-  const clean = (value) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-  const artistKey = clean(artist);
-  const cleanTitle = title.split(" - ").at(-1).replace(/\s*[(\[].*?[)\]]/g, "").trim();
-  const matchKey = clean(cleanTitle) + ":" + artistKey + ":" + durationSec;
+  const candidates = await search(title + " " + artist, true);
+  const credits = new Set(artists.map(recordingKey));
+  return candidates.find((song) => song.id !== id && !song.isVideo && song.durationSec > 0 &&
+    sameRecordingTitle(song.title, title) && song.artists.some(({ name }) => credits.has(recordingKey(name)))) ?? null;
+}
+
+async function matchAlternate({ title, artist, artists, durationSec }, signal) {
+  if (!title || !artist || !durationSec) return null;
+  const artistPrefix = title.split(" - ")[0];
+  if (artists.some((credit) => recordingKey(artistPrefix) === recordingKey(credit)) && title.includes(" - ")) {
+    title = title.slice(artistPrefix.length + 3);
+  }
+  const cleanTitle = recordingTitle(title).title;
+  const matchKey = JSON.stringify([recordingKey(title), artists.map(recordingKey), durationSec]);
   const cached = alternate.get(matchKey);
   if (cached?.until > Date.now()) return cached.url;
   const searchUrl = new URL("https://saavn.sumit.co/api/search/songs");
@@ -187,9 +218,7 @@ async function matchAlternate({ title, artist, durationSec }, signal) {
   if (!answer.ok) return null;
   const data = await answer.json();
   for (const result of data.data?.results ?? []) {
-    if (result.type !== "song" || result.rights || typeof result.name !== "string" ||
-        clean(result.name) !== clean(cleanTitle) || !(Math.abs(Number(result.duration) - durationSec) <= 10) ||
-        !result.artists?.primary?.some(({ name }) => typeof name === "string" && clean(name) === artistKey)) continue;
+    if (!matchesAlternateTrack(result, { title, artists, durationSec })) continue;
     const audio = result.downloadUrl?.find(({ quality }) => quality === "160kbps")?.url;
     if (!audio) continue;
     const url = new URL(audio);
@@ -202,7 +231,7 @@ async function matchAlternate({ title, artist, durationSec }, signal) {
   return null;
 }
 
-const sourceKey = (id, metadata) => JSON.stringify([id, metadata?.title, metadata?.artist, metadata?.durationSec]);
+const sourceKey = (id, metadata) => JSON.stringify([id, metadata?.title, metadata?.artists, metadata?.durationSec]);
 
 async function probe(url, provider, signal) {
   if (!url || signal.aborted) return null;

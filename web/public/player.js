@@ -47,9 +47,11 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   const mediaTime = () => startAt ?? (audio.hasAttribute("src") ? audio.currentTime : resumePosition);
   const stateKey = () => "aftertone.player." + owner;
   const totalTime = () => Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number(current()?.durationSec) || 0;
-  const streamParams = (song) => new URLSearchParams({
-    id: song.id, title: song.title, artist: song.artists?.[0]?.name ?? "", duration: song.durationSec || 0,
-  }).toString();
+  function streamParams(song) {
+    const query = new URLSearchParams({ id: song.id, title: song.title, duration: song.durationSec || 0 });
+    for (const { name } of song.artists?.slice(0, 5) ?? []) query.append("artist", name);
+    return query.toString();
+  }
 
   function release(element) {
     element.pause();
@@ -187,6 +189,19 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       actions.append(button("Retry", () => start(), "quiet compact", "refresh"), original);
       panel.append(actions);
     }
+  }
+
+  async function offerAudioVersion(song, attempt) {
+    try {
+      const { data } = await api("audio-version?" + streamParams(song));
+      if (!data || current() !== song || activation !== attempt || !failed) return;
+      const actions = $("playback-message").querySelector(".playback-error-actions");
+      actions?.prepend(button("Play audio version · " + clock(data.durationSec), () => {
+        queue[index] = data;
+        select(index);
+      }, "accent compact", "play"));
+      if (actions && dialog.open) prepare(data);
+    } catch { /* The original track and retry remain available. */ }
   }
 
   function select(position, autoplay = true, offset = 0) {
@@ -613,6 +628,8 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       showMessage("No audio source could start for this track.", true);
       paintControls();
       say("This track couldn’t play. Open Now Playing for options.");
+      const song = current();
+      if (song.isVideo) void offerAudioVersion(song, activation);
       api("me").catch(() => {});
     },
   };

@@ -3,7 +3,7 @@ import test from "node:test";
 import { normalizeLibrary, tasteSeeds } from "./state.mjs";
 import { parseLyrics } from "./lyrics.mjs";
 import { moveTrack } from "./public/ui.js";
-import { firstAudioSource } from "./music.mjs";
+import { firstAudioSource, matchesAlternateTrack } from "./music.mjs";
 import { normalizeTaste } from "./discover.mjs";
 
 const a = { id: "aaaaaaaaaaa", title: "A", artists: [{ name: "First artist" }] };
@@ -74,4 +74,17 @@ test("a matching alternate can start while the primary lookup is still pending",
 test("an immediate alternate miss starts the primary without waiting for the hedge", async () => {
   equal(await firstAudioSource(async () => null, async () => "primary", 10000), "primary");
   equal(await firstAudioSource(async () => null, async () => null), null);
+});
+
+test("recognizes film title punctuation and credits without silently changing edits", () => {
+  const candidate = {
+    type: "song", name: "Tu Mil Jaaye (From &quot;KING&quot;)", duration: 315,
+    artists: { primary: [{ name: "Sachin-Jigar" }, { name: "Arijit Singh" }] },
+  };
+  const album = { title: 'Tu Mil Jaaye (From "KING")', artists: ["Kumaar", "Arijit Singh"], durationSec: 316 };
+  equal(matchesAlternateTrack(candidate, album), true);
+  equal(matchesAlternateTrack(candidate, { ...album, durationSec: 223 }), false);
+  equal(matchesAlternateTrack(candidate, { ...album, title: "Tu Mil Jaaye (Remix)" }), false);
+  equal(matchesAlternateTrack(candidate, { ...album, title: 'Tu Mil Jaaye (From "Another Film")' }), false);
+  equal(matchesAlternateTrack(candidate, { ...album, artists: ["Unrelated artist"] }), false);
 });
