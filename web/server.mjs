@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { ApiError, createFirebase } from "./firebase.mjs";
 import { emptyLibrary, isTrackId, normalizeLibrary } from "./state.mjs";
-import { audioVersion, search, stream } from "./music.mjs";
+import { search, stream } from "./music.mjs";
 import { lyrics } from "./lyrics.mjs";
 import { knownTopic, normalizeTaste, recommend, tasteArtists } from "./discover.mjs";
 
@@ -193,16 +193,16 @@ async function route(req, res, signal) {
     if (!q) throw new ApiError(400, "Enter a song or artist.");
     return Response.json(await search(q, true));
   }
-  if (get && ["/api/stream", "/api/audio-version"].includes(path) && isTrackId(query.get("id"))) {
+  if (get && path === "/api/stream" && isTrackId(query.get("id"))) {
     const artists = query.getAll("artist").slice(0, 5).map((name) => name.trim().slice(0, 180)).filter(Boolean);
     const metadata = {
       title: query.get("title")?.slice(0, 220),
       artist: artists[0],
       artists,
+      isVideo: query.get("video") === "1",
       durationSec: Math.max(0, Math.min(Number(query.get("duration")) || 0, 86400)),
     };
     const id = query.get("id");
-    if (path === "/api/audio-version") return Response.json(await audioVersion(id, metadata));
     return stream(id, req.headers.range ?? "bytes=0-", signal, metadata);
   }
   throw new ApiError(404, "This page is unavailable.");

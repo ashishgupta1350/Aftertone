@@ -10,6 +10,7 @@ const searches = new Map();
 const unplayable = new Map();
 const sources = new Map();
 const selecting = new Map();
+const audioMirror = "https://echostreamz.com";
 const runs = (text) => text?.simpleText ?? text?.runs?.map((part) => part.text).join("") ?? "";
 const thumb = (id) => "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
 const seconds = (value) => /^\d+(?::\d{2})+$/.test(value)
@@ -193,9 +194,10 @@ export function matchesAlternateTrack(result, { title, artists, durationSec }) {
       .some(({ name }) => typeof name === "string" && artists.some((artist) => recordingKey(artist) === recordingKey(name)));
 }
 
-export async function audioVersion(id, { title, artist, artists, durationSec }) {
+async function audioVersion(id, { title, artist, artists, durationSec }, signal) {
   if (!title || !artist || !durationSec) return null;
   const candidates = await search(title + " " + artist, true);
+  if (signal.aborted) return null;
   const credits = new Set(artists.map(recordingKey));
   return candidates.find((song) => song.id !== id && !song.isVideo && song.durationSec > 0 &&
     sameRecordingTitle(song.title, title) && song.artists.some(({ name }) => credits.has(recordingKey(name)))) ?? null;
@@ -231,7 +233,7 @@ async function matchAlternate({ title, artist, artists, durationSec }, signal) {
   return null;
 }
 
-const sourceKey = (id, metadata) => JSON.stringify([id, metadata?.title, metadata?.artists, metadata?.durationSec]);
+const sourceKey = (id, metadata) => JSON.stringify([id, metadata?.title, metadata?.artists, metadata?.durationSec, metadata?.isVideo]);
 
 async function probe(url, provider, signal) {
   if (!url || signal.aborted) return null;
@@ -246,8 +248,9 @@ async function probe(url, provider, signal) {
   return valid ? { url, provider } : null;
 }
 
-export async function firstAudioSource(alternateSource, primarySource, delay = 220) {
+export async function firstAudioSource(alternateSource, primarySource, delay = 220, parent) {
   const work = new AbortController();
+  const signal = parent ? AbortSignal.any([parent, work.signal]) : work.signal;
   let startPrimary;
   const ready = new Promise((done) => { startPrimary = done; });
   const timer = setTimeout(startPrimary, delay);
@@ -255,9 +258,9 @@ export async function firstAudioSource(alternateSource, primarySource, delay = 2
     if (!source) throw new Error("Audio source unavailable");
     return source;
   }
-  const alternateResult = Promise.resolve().then(() => alternateSource(work.signal)).then(requireSource);
+  const alternateResult = Promise.resolve().then(() => signal.aborted ? null : alternateSource(signal)).then(requireSource);
   void alternateResult.catch(startPrimary);
-  const primaryResult = ready.then(() => work.signal.aborted ? null : primarySource(work.signal)).then(requireSource);
+  const primaryResult = ready.then(() => signal.aborted ? null : primarySource(signal)).then(requireSource);
   try {
     return await Promise.any([alternateResult, primaryResult]);
   } catch {
@@ -267,6 +270,26 @@ export async function firstAudioSource(alternateSource, primarySource, delay = 2
     work.abort();
     startPrimary();
   }
+}
+
+async function mirrorSource(origin, id, signal) {
+  const api = new URL("/api/v1/videos/" + id, origin);
+  api.searchParams.set("local", "true");
+  api.searchParams.set("fields", "videoId,adaptiveFormats");
+  const result = await fetch(api, { redirect: "error", signal: AbortSignal.any([signal, AbortSignal.timeout(6500)]) });
+  if (!result.ok) {
+    await result.body?.cancel();
+    return null;
+  }
+  const video = await result.json();
+  if (video?.videoId !== id || !Array.isArray(video.adaptiveFormats)) return null;
+  const formats = video.adaptiveFormats.filter((format) => format.type?.startsWith("audio/mp4"));
+  const format = formats.find((item) => String(item.itag) === "140") ?? formats[0];
+  if (typeof format?.url !== "string") return null;
+  const url = new URL(format.url, origin);
+  // Only stream audio from the same configured host and its documented media route.
+  if (url.origin !== origin || url.username || url.password || url.pathname !== "/videoplayback") return null;
+  return probe(url, "mirror", signal);
 }
 
 async function primarySource(id, signal) {
@@ -290,15 +313,35 @@ async function primarySource(id, signal) {
   return null;
 }
 
+function originalSource(id, metadata, signal) {
+  return firstAudioSource(
+    async (work) => metadata ? probe(await matchAlternate(metadata, work), "alternate", work) : null,
+    (work) => firstAudioSource(
+      (mirror) => mirrorSource(audioMirror, id, mirror),
+      (direct) => primarySource(id, direct),
+      cache.get(id)?.until > Date.now() ? 0 : 700, work,
+    ),
+    220, signal,
+  );
+}
+
+async function studioSource(id, metadata, signal) {
+  const song = await audioVersion(id, metadata, signal);
+  if (!song || signal.aborted) return null;
+  const artists = song.artists.map(({ name }) => name);
+  return originalSource(song.id, { title: song.title, artist: artists[0], artists, durationSec: song.durationSec }, signal);
+}
+
 function selectSource(id, metadata, key) {
   const saved = sources.get(key);
   if (saved?.until > Date.now()) return Promise.resolve(saved);
   if (selecting.has(key)) return selecting.get(key);
-  const selection = firstAudioSource(
-    async (signal) => metadata ? probe(await matchAlternate(metadata, signal), "alternate", signal) : null,
-    (signal) => primarySource(id, signal),
-    cache.get(id)?.until > Date.now() ? 0 : 220,
-  ).then((source) => {
+  const lookup = metadata?.isVideo ? firstAudioSource(
+    (signal) => originalSource(id, metadata, signal),
+    (signal) => studioSource(id, metadata, signal),
+    2100,
+  ) : originalSource(id, metadata);
+  const selection = lookup.then((source) => {
     if (!source) return null;
     if (sources.size >= 128) sources.delete(sources.keys().next().value);
     const entry = { ...source, until: Date.now() + 10 * 60000 };

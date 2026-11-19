@@ -42,6 +42,8 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   let lastPersist = 0;
   let failed = false;
   let waiting = false;
+  let recoverySkips = 0;
+  let resumedAfterError = false;
 
   const current = () => queue[index];
   const mediaTime = () => startAt ?? (audio.hasAttribute("src") ? audio.currentTime : resumePosition);
@@ -50,6 +52,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
   function streamParams(song) {
     const query = new URLSearchParams({ id: song.id, title: song.title, duration: song.durationSec || 0 });
     for (const { name } of song.artists?.slice(0, 5) ?? []) query.append("artist", name);
+    if (song.isVideo) query.set("video", "1");
     return query.toString();
   }
 
@@ -109,7 +112,7 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     if (waiting === value) return;
     waiting = value;
     if (current()) $("artist").textContent = value ? "Loading audio…" : artist(current());
-    if (!failed) showMessage(value ? "Loading audio…" : "");
+    $("playback-message").hidden = !value;
   }
 
   function save() {
@@ -140,7 +143,9 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     shuffle = false;
     repeat = "off";
     failed = false;
-    waiting = false;
+    setWaiting(false);
+    recoverySkips = 0;
+    resumedAfterError = false;
     clearPrepared();
     failedPreload = null;
     activation = null;
@@ -175,47 +180,19 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     } catch { /* Start with an empty queue if storage is unavailable. */ }
   }
 
-  function showMessage(message, retry = false) {
-    const panel = $("playback-message");
-    panel.hidden = !message;
-    panel.replaceChildren();
-    if (message) panel.append(node("span", message));
-    if (retry) {
-      const actions = node("div", "", "playback-error-actions");
-      const original = node("a", "Open on YouTube", "quiet compact");
-      original.href = "https://www.youtube.com/watch?" + new URLSearchParams({ v: current().id });
-      original.target = "_blank";
-      original.rel = "noopener noreferrer";
-      actions.append(button("Retry", () => start(), "quiet compact", "refresh"), original);
-      panel.append(actions);
-    }
-  }
-
-  async function offerAudioVersion(song, attempt) {
-    try {
-      const { data } = await api("audio-version?" + streamParams(song));
-      if (!data || current() !== song || activation !== attempt || !failed) return;
-      const actions = $("playback-message").querySelector(".playback-error-actions");
-      actions?.prepend(button("Play audio version · " + clock(data.durationSec), () => {
-        queue[index] = data;
-        select(index);
-      }, "accent compact", "play"));
-      if (actions && dialog.open) prepare(data);
-    } catch { /* The original track and retry remain available. */ }
-  }
-
-  function select(position, autoplay = true, offset = 0) {
+  function select(position, autoplay = true, offset = 0, recovering = false) {
     if (!queue[position]) return;
     listen(true);
     release(audio);
+    if (!recovering) recoverySkips = 0;
+    resumedAfterError = false;
     index = position;
     startAt = null;
     resumePosition = offset;
     activation = null;
     listened = lastPosition = lastSaved = 0;
     failed = false;
-    waiting = false;
-    showMessage("");
+    setWaiting(false);
     lyricKey = null;
     lyricRows = [];
     lyricLine = -1;
@@ -232,7 +209,6 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
       if (failed) resumePosition = mediaTime();
       startAt = resumePosition > 0 ? resumePosition : null;
       failed = false;
-      showMessage("");
       activation ||= Date.now();
       const key = streamParams(song);
       if (activatePrepared(key)) {
@@ -617,19 +593,27 @@ export function createPlayer({ api, say, liked, toggleLike, addToPlaylist, recor
     },
     play: paintControls,
     waiting() { if (!audio.paused && !failed && current()) setWaiting(true); },
-    playing() { setWaiting(false); prepare(queue[index + 1], "queue"); },
+    playing() { recoverySkips = 0; setWaiting(false); prepare(queue[index + 1], "queue"); },
     pause() { if (audio.paused) setWaiting(false); listen(true); paintControls(); save(); },
     ended() { listen(true); step(1, true); paintControls(); },
     volumechange: paintControls,
     error() {
-      if (!owner || !current() || !audio.hasAttribute("src")) return;
+      if (!owner || failed || !current() || !audio.hasAttribute("src")) return;
       failed = true;
       setWaiting(false);
-      showMessage("No audio source could start for this track.", true);
+      if (navigator.onLine !== false) {
+        if (audio.currentTime > 0.25 && !resumedAfterError) {
+          resumedAfterError = true;
+          start();
+          return;
+        }
+        if (recoverySkips < 2 && queue[index + 1]) {
+          recoverySkips++;
+          select(index + 1, true, 0, true);
+          return;
+        }
+      }
       paintControls();
-      say("This track couldn’t play. Open Now Playing for options.");
-      const song = current();
-      if (song.isVideo) void offerAudioVersion(song, activation);
       api("me").catch(() => {});
     },
   };

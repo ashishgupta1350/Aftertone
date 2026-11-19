@@ -76,6 +76,18 @@ test("an immediate alternate miss starts the primary without waiting for the hed
   equal(await firstAudioSource(async () => null, async () => null), null);
 });
 
+test("a cancelled source lookup never starts its second provider", async () => {
+  const parent = new AbortController();
+  let fallbackCalls = 0;
+  const result = await firstAudioSource((signal) => {
+    parent.abort();
+    equal(signal.aborted, true);
+    return null;
+  }, () => { fallbackCalls++; return "fallback"; }, 10000, parent.signal);
+  equal(result, null);
+  equal(fallbackCalls, 0);
+});
+
 test("recognizes film title punctuation and credits without silently changing edits", () => {
   const candidate = {
     type: "song", name: "Tu Mil Jaaye (From &quot;KING&quot;)", duration: 315,
