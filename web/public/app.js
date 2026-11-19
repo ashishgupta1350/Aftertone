@@ -105,7 +105,6 @@ async function openAccount() {
   $("sidebar").hidden = $("top").hidden = $("main").hidden = false;
   $("admin-link").hidden = !user.admin;
   player.restore(user.uid);
-  if (!preferences && !hasListeningTaste()) tastePicker.open();
   render();
 }
 
@@ -383,20 +382,6 @@ function empty(message, symbol = "music", action) {
   if (action) panel.append(action);
   return panel;
 }
-function featured(song, songs, label) {
-  const banner = node("section", "", "featured");
-  const sizes = "(max-width: 700px) 30vw, 320px";
-  const background = artwork(node("img", "", "feature-glow"), song, false, sizes);
-  const copy = node("div", "", "feature-copy");
-  copy.append(node("p", label, "eyebrow"), node("h2", song.title), node("p", artist(song), "feature-artist"));
-  const actions = node("div", "", "inline-actions");
-  actions.append(prepareOnIntent(button("Play now", () => player.play(song, songs), "accent", "play"), song),
-    iconButton("queue", "Add to queue", () => player.add(song), "glass-button"));
-  copy.append(actions);
-  banner.append(background, copy, artwork(node("img", "", "feature-art"), song, false, sizes));
-  return banner;
-}
-
 function playlistTile(playlist) {
   const tile = link("", playlistLink(playlist.id), "playlist-tile");
   const frame = node("span", "", "playlist-thumb");
@@ -609,43 +594,148 @@ function browseTiles() {
   return group;
 }
 
+function homeShortcuts(recent, saved) {
+  const group = node("nav", "", "home-shortcuts");
+  group.setAttribute("aria-label", "Listening shortcuts");
+  const shortcuts = [
+    saved.length ? ["Liked songs", "#likes", "heart"] : ["Search songs", "#search", "search"],
+    recent.length ? ["History", "#history", "history"] : ["Explore music", "#explore", "explore"],
+    ["Charts", "#explore=popular", "music"],
+    ["New releases", "#explore=new", "queue"],
+  ];
+  for (const [label, href, symbol] of shortcuts) group.append(link(label, href, "home-shortcut", symbol));
+  return group;
+}
+
+function homeTopics() {
+  const strip = node("nav", "", "home-topics");
+  strip.setAttribute("aria-label", "Browse by language or mood");
+  const languages = [...new Set([...(preferences?.languages ?? []), "hindi", "english"])].slice(0, 3);
+  const choices = [...languages, "chill", "workout", "focus"];
+  for (const id of choices) {
+    const topic = topics.find(([slug]) => slug === id);
+    if (topic) strip.append(link(topic[1], "#explore=" + id, "home-topic"));
+  }
+  return strip;
+}
+
+function homePicks(main, version, hasTaste, popular) {
+  const title = node("h2", hasTaste ? "Quick picks" : "Popular now");
+  title.id = "home-picks-title";
+  const panel = node("section", "", "home-picks");
+  panel.setAttribute("aria-labelledby", title.id);
+  const header = node("div", "", "section-head");
+  const refresh = iconButton("refresh", "Refresh Quick picks", () => {
+    rotation = (rotation + 1) % 100;
+    void load();
+  });
+  header.append(title, hasTaste ? refresh : link("View charts", "#explore=popular", "section-link", "arrow"));
+
+  const body = node("div", "", "home-picks-body");
+  const list = node("div", "", "home-pick-list");
+  const mix = node("div", "", "home-mix");
+  const art = node("div", "", "home-mix-art");
+  art.setAttribute("aria-hidden", "true");
+  const mixName = node("h3", hasTaste ? "Your mix" : "Trending mix");
+  const details = node("div", "", "home-mix-details");
+  const count = node("p", "", "home-mix-count");
+  const playMix = button("Play mix", () => {
+    if (songs.length) player.play(songs[0], songs);
+  }, "accent", "play");
+  playMix.disabled = true;
+  details.append(mixName, count, playMix);
+  mix.append(art, details);
+  body.append(mix, list);
+  panel.append(header, body);
+  main.append(panel);
+  let songs = [];
+
+  function showRows() {
+    list.replaceChildren(...songs.slice(0, 6).map((song) => {
+      const row = prepareOnIntent(button("", () => player.play(song, songs), "home-pick"), song);
+      row.setAttribute("aria-label", "Play " + song.title + " by " + artist(song));
+      row.title = song.title + " · " + artist(song);
+      const copy = node("span", "", "track-copy");
+      copy.append(node("strong", song.title), node("span", artist(song)));
+      row.append(artwork(node("img"), song, false, "48px"), copy, icon("play"));
+      return row;
+    }));
+
+    const covers = new Map();
+    for (const song of [...songs.slice(6), ...songs.slice(0, 6)]) {
+      const key = song.thumbnail || song.album?.id || song.id;
+      if (!covers.has(key)) covers.set(key, song);
+      if (covers.size === 4) break;
+    }
+    art.classList.toggle("home-mix-collage", covers.size === 4);
+    const images = covers.size === 4 ? [...covers.values()] : [songs[0]];
+    art.replaceChildren(...images.map((song) => artwork(node("img"), song, false, "124px")));
+    count.textContent = songs.length + (songs.length === 1 ? " song" : " songs");
+    playMix.disabled = false;
+    if (!tastePicker.openByUser) player.prepare(songs[0], "featured");
+  }
+
+  async function load() {
+    refresh.disabled = true;
+    list.setAttribute("aria-busy", "true");
+    if (!list.childElementCount) {
+      for (let i = 0; i < 6; i++) list.append(node("span", "", "home-pick-placeholder"));
+    }
+    try {
+      const personal = hasTaste ? await picks().catch(() => []) : [];
+      const tracks = personal.length ? personal : await popular();
+      if (version !== routeVersion) return;
+      if (!tracks.length && songs.length) {
+        say("No new picks this time.");
+        return;
+      }
+      panel.dataset.feed = personal.length ? "personal" : "charts";
+      title.textContent = personal.length ? "Quick picks" : "Popular now";
+      mixName.textContent = personal.length ? "Your mix" : "Trending mix";
+      if (tracks.length) {
+        songs = tracks;
+        showRows();
+      } else if (!songs.length) {
+        list.replaceChildren(empty("No music in this mix yet.", "music", link("Explore music", "#explore", "quiet compact", "explore")));
+      }
+    } catch {
+      if (version !== routeVersion) return;
+      if (songs.length) say("Couldn’t refresh your picks.");
+      else list.replaceChildren(empty("Music is temporarily unavailable.", "music", button("Retry", load, "quiet compact", "refresh")));
+    } finally {
+      refresh.disabled = false;
+      list.setAttribute("aria-busy", "false");
+      mix.hidden = !songs.length;
+    }
+  }
+  void load();
+}
+
 function home(main, version) {
   const { likes, playlists, plays } = state.library;
   const recent = recentSongs(plays).slice(0, 6);
   const saved = likes.slice(0, 6).map(({ song }) => song);
-  const hour = new Date().getHours();
-  main.append(pageTitle(hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening",
-    link("Explore", "#explore", "quiet home-explore", "explore")));
-  const hero = node("div", "", "featured-slot");
-  const collection = recent.length ? recent : saved.length ? saved : playlists.find((list) => list.songs.length)?.songs;
-  function lead(songs, label) {
-    if (version !== routeVersion || !songs?.length || hero.children.length) return;
-    hero.append(featured(songs[0], songs, label));
-    if (!tastePicker.openByUser) player.prepare(songs[0], "featured");
-  }
-  lead(collection, recent.length ? "From your history" : "From your library");
-  main.append(hero);
-
   const hasTaste = hasListeningTaste() || preferences?.languages.length || preferences?.genres.length || preferences?.artists.length;
-  if (hasTaste) {
-    const slot = node("div");
-    const refresh = iconButton("refresh", "Refresh Quick picks", () => {
-      rotation = (rotation + 1) % 100;
-      refresh.disabled = true;
-      fillShelf(slot, picks(), version, 6).finally(() => { refresh.disabled = false; });
-    });
-    main.append(section("Quick picks", slot, refresh));
-    void fillShelf(slot, picks(), version, 6).then((songs) => lead(songs, "Picked for you"));
+  const isNew = !preferences && !hasTaste;
+  main.append(pageTitle("Home", button(isNew ? "Choose your music" : "Tune recommendations",
+    () => tastePicker.open(preferences, !isNew), "quiet home-taste", "profile")));
+  main.append(homeShortcuts(recent, saved), homeTopics());
+  const getPopular = () => picks("popular");
+  homePicks(main, version, hasTaste, getPopular);
+  if (recent.length) {
+    const replay = recent.length > 2 ? songGrid(recent) : songRows(recent);
+    main.append(section("Listen again", replay, link("History", "#history", "section-link", "arrow")));
   }
-  const popular = node("div");
-  main.append(section("Popular now", popular, link("Browse", "#explore=popular", "section-link", "arrow")));
-  void fillShelf(popular, picks("popular"), version, 6).then((songs) => {
-    lead(songs, "Popular now");
-  });
+  if (hasTaste) {
+    const popular = node("div");
+    const chartShelf = section("Popular now", popular, link("Browse", "#explore=popular", "section-link", "arrow"));
+    chartShelf.classList.add("home-charts");
+    main.append(chartShelf);
+    void fillShelf(popular, getPopular(), version, 6);
+  }
   const releases = node("div");
   main.append(section("New releases", releases, link("Browse", "#explore=new", "section-link", "arrow")));
-  void fillShelf(releases, picks("new"), version, 6).then((songs) => lead(songs, "New release"));
-  if (recent.length > 1) main.append(section("Listen again", songGrid(recent.slice(1)), link("History", "#history", "section-link", "arrow")));
+  void fillShelf(releases, picks("new"), version, 6);
   if (playlists.length) main.append(section("Your playlists", playlistGrid(playlists.slice(0, 6)), link("View all", "#playlists", "section-link", "arrow")));
   if (saved.length && !recent.length) main.append(section("Liked songs", songGrid(saved), link("View all", "#likes", "section-link", "arrow")));
 }
