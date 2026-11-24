@@ -28,6 +28,7 @@ class VoiceSearchTest {
         assertEquals(VoiceRequest.Resume, parse("  ", VoiceSearch.FOCUS_ANY))
         // "Play music on Prism" sends no words with the "any kind" focus.
         assertEquals(VoiceRequest.Resume, parse("on Prism", VoiceSearch.FOCUS_ANY))
+        assertEquals(VoiceRequest.Resume, parse("on Aftertone", VoiceSearch.FOCUS_ANY))
     }
 
     @Test fun anArtistPlaysTheArtist() {
@@ -44,6 +45,7 @@ class VoiceSearchTest {
     @Test fun aSongIsLookedUpByTitleAndArtist() {
         assertEquals(VoiceRequest.Song("Anti-Hero Taylor Swift"), parse("anti hero by taylor swift", VoiceSearch.FOCUS_SONG, title = "Anti-Hero", artist = "Taylor Swift"))
         assertEquals(VoiceRequest.Song("Get Lucky"), parse("Get Lucky", VoiceSearch.FOCUS_SONG))
+        assertEquals(VoiceRequest.Song("Get Lucky"), parse("play Get Lucky on Aftertone", VoiceSearch.FOCUS_SONG))
     }
 
     @Test fun aGenreIsLookedUpAsASong() {

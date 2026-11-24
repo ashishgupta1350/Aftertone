@@ -2,6 +2,10 @@
 
 Aftertone is an Android music app based on [Prism](https://github.com/Yigder/Prism). It adds ordered YouTube Music library imports, personalized discovery and Explore, public Spotify playlist lookup, and alternate audio sources for playback when available.
 
+**[Download Aftertone for Android](https://github.com/ashishgupta1350/Aftertone/releases/latest/download/Aftertone.apk)** · [Release notes](https://github.com/ashishgupta1350/Aftertone/releases)
+
+Aftertone checks its GitHub releases when you open the app. Use **Settings → Backup & about → Check for updates** to check right away.
+
 Build with JDK 17 or later and Android SDK 37 using `./gradlew :app:assembleDebug` (`.\gradlew.bat :app:assembleDebug` on Windows). See [CONTRIBUTING.md](CONTRIBUTING.md) for build variants.
 
 To host the web player and connect the Android app to the same accounts and libraries, follow the [Aftertone Web setup](web/README.md).

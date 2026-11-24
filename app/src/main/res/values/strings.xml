@@ -120,6 +120,16 @@
     <string name="since_you_saved_it_update_it">%1$s since you saved it. Update it to keep them in %2$s.</string>
     <string name="a_look_keeps_colors_type_icons">A Look keeps colors, type, icons, backgrounds, the player and lyrics\' look together. Pick one and everything changes at once; Undo puts it back.</string>
     <string name="update">Update</string>
+    <string name="aftertone_update_available">Aftertone %1$s is available</string>
+    <string name="aftertone_update_downloading">Downloading Aftertone %1$s</string>
+    <string name="aftertone_update_installing">Installing Aftertone %1$s</string>
+    <string name="aftertone_update_ready">Aftertone %1$s is ready. Tap below to update.</string>
+    <string name="aftertone_update_permission">Allow Aftertone to install updates</string>
+    <string name="aftertone_installed_version">Aftertone %1$s</string>
+    <string name="aftertone_backup_summary">Aftertone %1$s · backup, updates</string>
+    <string name="aftertone_update_wrong_package">The APK belongs to a different app.</string>
+    <string name="aftertone_update_wrong_signer">Aftertone could not verify the update’s signing certificate.</string>
+    <string name="aftertone_no_related_track">No related track is available right now.</string>
     <string name="save_as_new">Save as new</string>
     <string name="save_as_a_look">Save as a Look</string>
     <string name="share">Share</string>

@@ -127,7 +127,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     private val shareLog = t(R.string.share_diagnostics)
     private val clearLog = t(R.string.clear_diagnostics)
     private val unofficial = t(R.string.unofficial_not_affiliated_with_google_or)
-    private val installed = tr(R.string.prism, BuildConfig.VERSION_NAME)
+    private val installed = tr(R.string.aftertone_installed_version, BuildConfig.VERSION_NAME)
 
     /** Debug builds (as the tests are) also have the design gallery's row. */
     private val aboutRows = if (BuildConfig.DEBUG) 4 else 3
@@ -324,10 +324,10 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
 
     @Test fun theUpdateRowsValueLine() {
         assertEquals(installed, updateCheckValue(null, null))
-        assertEquals(tr(R.string.prism_is_available, "2.0"), updateCheckValue(null, "2.0"))
+        assertEquals(tr(R.string.aftertone_update_available, "2.0"), updateCheckValue(null, "2.0"))
         assertEquals(t(R.string.asking_github), updateCheckValue(UpdateCheck.Asking, "2.0"))
         assertEquals(t(R.string.you_re_up_to_date), updateCheckValue(UpdateCheck.Current, null))
-        assertEquals(tr(R.string.prism_is_out_tap_below_to, "2.0"), updateCheckValue(UpdateCheck.Newer("2.0"), "2.0"))
+        assertEquals(tr(R.string.aftertone_update_ready, "2.0"), updateCheckValue(UpdateCheck.Newer("2.0"), "2.0"))
         assertEquals(t(R.string.couldn_t_reach_github_try_again), updateCheckValue(UpdateCheck.Unreachable, null))
     }
 
@@ -349,7 +349,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
 
         answer = { "9.9.9" }
         tap(check)
-        compose.waitUntil(5_000) { valueOf(check) == tr(R.string.prism_is_out_tap_below_to, "9.9.9") }
+        compose.waitUntil(5_000) { valueOf(check) == tr(R.string.aftertone_update_ready, "9.9.9") }
 
         answer = { throw java.io.IOException("offline") }
         tap(check)
@@ -362,7 +362,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     @Test fun anUpdateIsOfferedUnderItsRow() {
         show()
         assertEquals(newer, container.updates.available.value?.version)
-        val offer = tr(R.string.prism_is_available, newer)
+        val offer = tr(R.string.aftertone_update_available, newer)
         assertEquals(offer, valueOf(check))
         val card = compose.onNodeWithTag(BACKUP_ABOUT_UPDATE).fetchSemanticsNode()
         assertEquals("the card's own title too", 2, shown(offer))

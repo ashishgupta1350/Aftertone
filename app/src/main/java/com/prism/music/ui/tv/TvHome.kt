@@ -191,7 +191,7 @@ fun TvUpdateBanner(version: String, onUpdate: () -> Unit, modifier: Modifier = M
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(tr(R.string.tv_update_ready, version), style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
+            Text(tr(R.string.aftertone_update_available, version), style = MaterialTheme.typography.titleMedium, color = scheme.onSurface)
             Text(note ?: tr(R.string.tv_update_note), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
         }
         TvButton(tr(R.string.update), onUpdate, Modifier.tvItem("$TAG_HOME/update"), icon = PrismIcons.Update, primary = true)

@@ -6,6 +6,7 @@ import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.util.Base64
 import androidx.media3.common.MediaItem
@@ -25,6 +26,7 @@ import com.prism.music.data.model.hiRes
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Request
 import java.io.File
 import java.security.MessageDigest
@@ -32,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The browse tree Android Auto (and other media browsers) see:
- * Home · Liked songs · Library · Recently played, plus search.
+ * Home, Made for you, Recents, Library, and the car host’s search UI.
  */
 class MediaTree(private val c: AppContainer) {
     companion object {
@@ -41,6 +43,8 @@ class MediaTree(private val c: AppContainer) {
         const val LIKED = "liked"
         const val LIBRARY = "library"
         const val RECENT = "recent"
+        const val RESUME_ROOT = "resume-root"
+        const val RESUME = "resume-queue"
         const val DOWNLOADS = "downloads"
         /** Prism's own mixes (Daily Mixes, the time-of-day mix, Release Radar). */
         const val MADE_FOR_YOU = "foryou"
@@ -53,8 +57,9 @@ class MediaTree(private val c: AppContainer) {
         const val HOLIDAY = "hm:"
         /** How many of each Home section's items show as tiles in the car. */
         private const val HOME_TILES = 8
-        /** The songs a search found, as a folder (a song tapped in the results plays them on from there). */
+        private const val TRACK = "track:"
         private const val SEARCH = "search"
+        private const val SEARCH_SUPPORTED = "android.media.browse.SEARCH_SUPPORTED"
         /** How many of each kind a search lists, and how many searches are kept. */
         private const val SEARCH_EACH = 8
         private const val KEPT_SEARCHES = 4
@@ -88,12 +93,14 @@ class MediaTree(private val c: AppContainer) {
                 .build()
         ).build()
 
-    private fun playable(song: Song, extras: android.os.Bundle? = null): MediaItem {
+    private fun playable(song: Song, extras: Bundle? = null, folderId: String? = null): MediaItem {
         songs[song.id] = song
         val item = song.toMediaItem()
-        return item.buildUpon().setMediaMetadata(
+        return item.buildUpon()
+            .apply { if (folderId != null) setMediaId(TRACK + Uri.encode(folderId) + "/" + Uri.encode(song.id)) }
+            .setMediaMetadata(
             // The cover picked for the song or its album (#305) when there is one.
-            item.mediaMetadata.buildUpon().setArtworkUri(artworkUri(c.covers.art(song))).setSubtitle(com.prism.music.data.SongVersions.shownOf(song).artistText)
+            item.mediaMetadata.buildUpon().setArtworkUri(artworkUri(c.covers.art(song), AUTO_PLAYLIST)).setSubtitle(com.prism.music.data.SongVersions.shownOf(song).artistText)
                 .apply { if (extras != null) setExtras(extras) }.build()
         ).build()
     }
@@ -117,11 +124,16 @@ class MediaTree(private val c: AppContainer) {
     fun root(): MediaItem = folder(ROOT, tr(R.string.app_name))
 
     /** The root's own hints for the car: lists of songs, folders as cover tiles (when the grid's on). */
-    fun rootExtras(): android.os.Bundle? = styled(browsableGrid = true, playableGrid = false)
+    fun rootExtras(): Bundle = (styled(browsableGrid = true, playableGrid = false) ?: Bundle()).apply {
+        putBoolean(SEARCH_SUPPORTED, true)
+    }
 
-    fun recentRoot(): MediaItem = folder(RECENT, tr(R.string.recently_played), type = MediaMetadata.MEDIA_TYPE_PLAYLIST)
+    fun recentRoot(): MediaItem = folder(RESUME_ROOT, tr(R.string.continue_listening))
 
-    suspend fun children(parentId: String): List<MediaItem> = when {
+    private fun resumeItem(song: Song) = playable(song, grouped(tr(R.string.continue_listening)))
+        .buildUpon().setMediaId(RESUME).build()
+
+    suspend fun children(parentId: String, current: Song? = null): List<MediaItem> = when {
         // Four tabs, as cars show a root's first four folders along the top (Liked songs and Downloads open Library).
         parentId == ROOT -> listOf(
             folder(HOME, tr(R.string.home), extras = styled(browsableGrid = true, playableGrid = true)),
@@ -129,23 +141,13 @@ class MediaTree(private val c: AppContainer) {
             folder(RECENT, tr(R.string.recents), type = MediaMetadata.MEDIA_TYPE_PLAYLIST),
             folder(LIBRARY, tr(R.string.library), type = MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS, extras = styled(browsableGrid = true, playableGrid = false)),
         )
-        // Home: every section's albums, playlists and songs as tiles under its heading (with the grid), like Spotify's
-        // home; without the grid, the sections as folders, as before.
-        parentId == HOME -> {
-            homeShelves = runCatching { c.ytm.fullHome(2) }.getOrDefault(homeShelves)
-            if (!grid) homeShelves.mapIndexed { i, s -> folder("shelf:$i", s.title, s.strapline, s.items.firstOrNull()?.thumbnail) }
-            else homeShelves.withIndex().flatMap { (i, s) ->
-                val group = grouped(s.title)
-                val shelfSongs = s.items.filterIsInstance<SongItem>().map { it.song }
-                if (shelfSongs.isNotEmpty()) folders["shelf:$i"] = s.title to shelfSongs
-                s.items.take(HOME_TILES).mapNotNull { item -> tile(item, group) }
-            }
-        }
+        parentId == RESUME_ROOT -> listOfNotNull(current?.let(::resumeItem))
+        parentId == HOME -> home(current)
         parentId.startsWith("shelf:") -> {
             val shelf = homeShelves.getOrNull(parentId.removePrefix("shelf:").toIntOrNull() ?: -1) ?: return emptyList()
             val shelfSongs = shelf.items.filterIsInstance<SongItem>().map { it.song }
             if (shelfSongs.isNotEmpty()) folders[parentId] = shelf.title to shelfSongs
-            shelf.items.mapNotNull { item -> tile(item, null) }
+            shelf.items.mapNotNull { item -> tile(item, null, parentId) }
         }
         parentId == MADE_FOR_YOU -> {
             // What's kept is listed straight away (the car waits for nothing); anything due is made behind it.
@@ -202,9 +204,51 @@ class MediaTree(private val c: AppContainer) {
         else -> emptyList()
     }
 
-    /** One of Home's items for the car: a song to play, or an album, playlist or artist to open; [extras] its heading. */
-    private fun tile(item: com.prism.music.data.model.BrowseItem, extras: android.os.Bundle?): MediaItem? = when (item) {
-        is SongItem -> playable(item.song, extras)
+    private suspend fun home(current: Song?): List<MediaItem> {
+        val history = c.library.recent.value
+        val recent = history.filterNot { it.id == current?.id }.take(HOME_TILES)
+        val group = grouped(tr(R.string.your_music))
+        val shortcuts = listOf(
+            folder(LIKED, tr(R.string.liked_songs), art = c.covers.custom("liked"), type = MediaMetadata.MEDIA_TYPE_PLAYLIST, extras = group, fallback = "ic_auto_liked"),
+            folder(DOWNLOADS, tr(R.string.downloads), type = MediaMetadata.MEDIA_TYPE_PLAYLIST, extras = group, fallback = "ic_auto_downloads"),
+            folder(MADE_FOR_YOU, tr(R.string.made_for_you), type = MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS, extras = group),
+        )
+        if (recent.isNotEmpty()) folders[RECENT] = tr(R.string.recently_played) to history
+        val listenAgainHeading = grouped(tr(R.string.listen_again))
+        val listenAgain = recent.map { playable(it, listenAgainHeading, RECENT) }
+        val shelves = loadHomeShelves().take(4).flatMapIndexed { i, shelf ->
+            val id = "shelf:$i"
+            if (!grid) listOf(folder(id, shelf.title, shelf.strapline, shelf.items.firstOrNull()?.thumbnail))
+            else {
+                val songs = shelf.items.filterIsInstance<SongItem>().map { it.song }
+                if (songs.isNotEmpty()) folders[id] = shelf.title to songs
+                val heading = grouped(shelf.title)
+                shelf.items.take(HOME_TILES).mapNotNull { tile(it, heading, id) }
+            }
+        }
+        return listOfNotNull(current?.let(::resumeItem)) + shortcuts + listenAgain + shelves
+    }
+
+    private suspend fun loadHomeShelves(): List<Shelf> {
+        if (homeShelves.isEmpty()) {
+            homeShelves = c.homeCache.read() ?: if (!c.network.isOnline()) emptyList() else {
+                withTimeoutOrNull(2_000) { runCatching { c.ytm.fullHome(1) }.getOrDefault(emptyList()) }.orEmpty()
+            }
+        }
+        return homeShelves
+    }
+
+    suspend fun firstSong(): Song? {
+        val online = c.network.isOnline()
+        val local = c.library.recent.value + c.library.likedShown.value + c.downloads.completedSongs()
+        return local.firstOrNull { !it.isEpisode && !it.isLive && (online || c.availableOffline(it.id)) }
+            ?: loadHomeShelves().asSequence().flatMap { it.items.asSequence() }.filterIsInstance<SongItem>()
+                .map { it.song }.firstOrNull { !it.isLive && !it.isEpisode && (online || c.availableOffline(it.id)) }
+    }
+
+    /** A song to play or a collection to open. Extras carry the heading for the car display. */
+    private fun tile(item: com.prism.music.data.model.BrowseItem, extras: Bundle?, folderId: String? = null): MediaItem? = when (item) {
+        is SongItem -> playable(item.song, extras, folderId)
         is AlbumItem -> folder("al:${item.id}", item.title, item.subtitle, item.thumbnail, MediaMetadata.MEDIA_TYPE_ALBUM, extras)
         is PlaylistItem -> folder(mixOrPlaylistId(item), item.title, item.subtitle, c.covers.art(item), MediaMetadata.MEDIA_TYPE_PLAYLIST, extras)
         is ArtistItem -> folder("ar:${item.id}", item.title, item.subtitle, item.thumbnail, MediaMetadata.MEDIA_TYPE_ARTIST, extras)
@@ -218,7 +262,7 @@ class MediaTree(private val c: AppContainer) {
             startItem(SHUFFLE, id, tr(R.string.shuffle_play), com.prism.music.data.model.songCount(list.size), "ic_auto_shuffle"),
             startItem(DJ, id, tr(R.string.play_as_a_dj_set), tr(R.string.in_the_order_that_blends_best), "ic_auto_dj"),
         ) else emptyList()
-        return top + list.map(::playable)
+        return top + list.map { playable(it, folderId = id) }
     }
 
     private fun startItem(prefix: String, folderId: String, title: String, subtitle: String, icon: String) = MediaItem.Builder().setMediaId("$prefix$folderId").setMediaMetadata(
@@ -266,22 +310,18 @@ class MediaTree(private val c: AppContainer) {
         val yours = grouped(tr(R.string.your_music))
         val lists = ownPlaylists().filter { VoiceSearch.names(it.title, query) > 0 }.take(SEARCH_EACH)
             .map { folder(it.folderId, it.title, it.subtitle, it.art, MediaMetadata.MEDIA_TYPE_PLAYLIST, yours) }
-        val liked = c.library.likedShown.value.filter { VoiceSearch.names("${it.title} ${it.artistText}", query) >= 2 }
-            .take(SEARCH_EACH).map { playable(it, yours) }
+        val saved = (c.library.likedShown.value + c.downloads.completedSongs()).distinctBy { it.id }
+        val librarySongs = saved.filter { VoiceSearch.names("${it.title} ${it.artistText}", query) >= 2 }
+            .take(SEARCH_EACH).map { playable(it, yours, SEARCH) }
         val taste = runCatching { c.taste.searchTaste() }.getOrDefault(com.prism.music.data.innertube.SearchRank.Taste.NONE)
         val found = runCatching { c.ytm.searchTop(query, taste) }.getOrNull()
-        val top = found?.top?.let { tile(it, grouped(tr(R.string.top_results))) }
+        val top = found?.top?.let { tile(it, grouped(tr(R.string.top_results)), SEARCH) }
         val sections = found?.sections.orEmpty().filter { (f, _) -> f in SEARCH_KINDS }.flatMap { (f, items) ->
             val heading = grouped(f.label)
             items.asSequence().filter { it.id != found?.top?.id && (it as? SongItem)?.song?.isLive != true }
-                .mapNotNull { tile(it, heading) }.take(SEARCH_EACH).toList()
+                .mapNotNull { tile(it, heading, SEARCH) }.take(SEARCH_EACH).toList()
         }
-        // A song's folder, so tapping one plays the songs found from there on (as a tapped song in a list does).
-        val foundSongs = (listOfNotNull((found?.top as? SongItem)?.song) +
-            found?.sections.orEmpty().firstOrNull { it.first == SearchFilter.SONGS }?.second.orEmpty().filterIsInstance<SongItem>().map { it.song })
-            .distinctBy { it.id }
-        if (foundSongs.isNotEmpty()) folders[SEARCH] = query to foundSongs
-        return (lists + liked + listOfNotNull(top) + sections).distinctBy { it.mediaId } to (found != null)
+        return (lists + librarySongs + listOfNotNull(top) + sections).distinctBy { it.mediaId } to (found != null)
     }
 
     /** A playlist of the listener's own, for the car: Prism's, then their YouTube library's. */
@@ -380,16 +420,29 @@ class MediaTree(private val c: AppContainer) {
         return folders[id]?.takeIf { it.second.isNotEmpty() }?.let { (title, list) -> VoicePick(item.title.ifBlank { title }, list) }
     }
 
-    suspend fun item(mediaId: String): MediaItem? = song(mediaId)?.let(::playable)
+    suspend fun item(mediaId: String, current: Song?): MediaItem? =
+        if (mediaId == RESUME) current?.let(::resumeItem)
+        else song(mediaId)?.let { playable(it, folderId = trackFolder(mediaId)) }
+
+    private fun trackFolder(mediaId: String): String? = mediaId.takeIf { it.startsWith(TRACK) }
+        ?.removePrefix(TRACK)?.substringBefore("/")?.let(Uri::decode)
+
+    fun songId(mediaId: String): String = if (trackFolder(mediaId) != null) Uri.decode(mediaId.substringAfter("/")) else mediaId
 
     /** Turns whatever a controller sent back into a playable song. */
-    suspend fun song(mediaId: String, fallback: MediaItem? = null): Song? =
-        songs[mediaId] ?: fallback?.toSong() ?: c.db.songs().get(mediaId)?.toSong()
-            ?: fallback?.mediaMetadata?.title?.let { Song(mediaId, it.toString()) }
+    suspend fun song(mediaId: String, fallback: MediaItem? = null): Song? {
+        val id = songId(mediaId)
+        return songs[id] ?: fallback?.toSong() ?: c.db.songs().get(id)?.toSong()
+            ?: fallback?.mediaMetadata?.title?.let { Song(id, it.toString()) }
+    }
 
-    /** The folder a tapped song was listed in, for playing the rest of it after. */
-    fun folderOf(mediaId: String): Pair<String, List<Song>>? =
-        if (mediaId.startsWith(SHUFFLE)) null else folders.values.firstOrNull { (_, list) -> list.any { it.id == mediaId } }
+    /** Use the source displayed by the car, even when the same song appears in several lists. */
+    suspend fun folderOf(mediaId: String): Pair<String, List<Song>>? {
+        val folderId = trackFolder(mediaId) ?: return null
+        if (folderId == SEARCH) return null
+        val id = songId(mediaId)
+        return shuffleSongs(folderId)?.takeIf { (_, songs) -> songs.any { it.id == id } }
+    }
 
     /**
      * A picture for the car, through [ArtworkProvider]. [fallback]: one of Prism's own `ic_auto_` tiles, shown when

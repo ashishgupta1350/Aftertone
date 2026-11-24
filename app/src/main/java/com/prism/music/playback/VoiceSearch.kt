@@ -118,11 +118,11 @@ object VoiceSearch {
         }
     }
 
-    /** What was heard, without "on Prism" (when the Assistant leaves it in) or a leading "play". */
+    /** What was heard, without the app name (when the Assistant leaves it in) or a leading "play". */
     private fun clean(s: String?): String {
         var t = s?.trim().orEmpty()
         if (t.isEmpty()) return t
-        t = t.replace(ON_PRISM, "").replace(PLAY, "").trim()
+        t = t.replace(APP_SUFFIX, "").replace(PLAY, "").trim()
         return t.replace(SPACES, " ")
     }
 
@@ -148,7 +148,7 @@ object VoiceSearch {
     private val DIACRITICS = Regex("\\p{InCombiningDiacriticalMarks}+")
     private val NOT_WORD = Regex("[^\\p{L}\\p{N}]+")
     private val SPACES = Regex("\\s+")
-    private val ON_PRISM = Regex("(^|\\s+)(on|in|from|with|using)\\s+prism(\\s+music)?\\s*$", RegexOption.IGNORE_CASE)
+    private val APP_SUFFIX = Regex("(^|\\s+)(on|in|from|with|using)\\s+(?:aftertone|prism)(\\s+music)?\\s*$", RegexOption.IGNORE_CASE)
     private val PLAY = Regex("^play\\s+", RegexOption.IGNORE_CASE)
     private val SHUFFLE = Regex("^shuffle\\b\\s*|\\s*\\bon shuffle$|\\s*\\bshuffled$", RegexOption.IGNORE_CASE)
     private val LIKED = Regex(

@@ -2,6 +2,13 @@
 
 Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome.
 
+## Publish an Aftertone Android release
+
+1. Increment both `versionName` and `versionCode` in `app/build.gradle.kts`. Keep the production application ID `com.prism.music.takeout` and use the same Aftertone release signing key.
+2. Point the ignored `keystore.properties` at your protected signing properties with `aftertoneSigningProperties=/path/to/keystore.properties`. That private file contains `storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Back up the signing key and its password in private storage.
+3. Build with `./gradlew :app:assembleRelease -PaftertoneRelease -PaftertoneServer=https://aftertone-fufx.onrender.com`. Verify the signed APK and install it over the previous release on a test device.
+4. Push the matching source commit, then publish a stable GitHub release with a tag such as `v1.9.1`, release notes, and the signed asset named exactly `Aftertone.apk`. The updater checks published releases and verifies the package, version code, and signing certificate before installation.
+
 ## Reporting a bug
 
 Open an [issue](../../issues/new/choose) and pick **Bug report**. The most useful things to include:

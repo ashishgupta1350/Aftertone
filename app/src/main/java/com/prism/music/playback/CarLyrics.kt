@@ -126,7 +126,15 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
         return super.handleSetPlayWhenReady(playWhenReady)
     }
 
+    var canSkipNext: (() -> Boolean)? = null
+    var skipNext: (() -> Boolean)? = null
+
+    fun updateSkipCommands() = invalidateState()
+
     override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): com.google.common.util.concurrent.ListenableFuture<*> {
+        if ((seekCommand == Player.COMMAND_SEEK_TO_NEXT || seekCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM) && skipNext?.invoke() == true) {
+            return com.google.common.util.concurrent.Futures.immediateVoidFuture()
+        }
         val order = shown
         val real = if (order != null && mediaItemIndex in order.indices) order[mediaItemIndex] else mediaItemIndex
         return super.handleSeek(real, positionMs, seekCommand)
@@ -135,6 +143,10 @@ class LyricsOverlayPlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
     override fun getState(): State {
         var s = super.getState()
         shown = null
+        if (canSkipNext?.invoke() == true) {
+            s = s.buildUpon().setAvailableCommands(s.availableCommands.buildUpon()
+                .addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).build()).build()
+        }
         remote?.volume?.let { v ->
             s = s.buildUpon()
                 .setDeviceInfo(androidx.media3.common.DeviceInfo.Builder(androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE).setMinVolume(0).setMaxVolume(100).build())

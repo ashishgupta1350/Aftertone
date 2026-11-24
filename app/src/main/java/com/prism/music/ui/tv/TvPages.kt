@@ -174,7 +174,7 @@ fun TvHomePlace(nav: TvNav, onSearch: () -> Unit) {
                     onUpdate = { if (!c.updates.canInstall()) runCatching { context.startActivity(c.updates.permissionIntent()) } else c.updates.install(u) },
                     note = when (val p = progress) {
                         is com.prism.music.data.UpdateProgress.Downloading -> tr(R.string.downloading_4, u.version)
-                        com.prism.music.data.UpdateProgress.NeedsPermission -> tr(R.string.allow_prism_to_install_updates)
+                        com.prism.music.data.UpdateProgress.NeedsPermission -> tr(R.string.aftertone_update_permission)
                         is com.prism.music.data.UpdateProgress.Failed -> p.message
                         else -> null
                     },

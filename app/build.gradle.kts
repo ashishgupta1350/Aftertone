@@ -17,6 +17,8 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+val aftertoneRelease = providers.gradleProperty("aftertoneRelease").isPresent
+
 android {
     namespace = "com.prism.music"
     compileSdk = 37
@@ -25,8 +27,8 @@ android {
         applicationId = "com.prism.music"
         minSdk = 26
         targetSdk = 36
-        versionCode = 62
-        versionName = "1.8.4.1"
+        versionCode = 63
+        versionName = "1.9.0"
         vectorDrawables { useSupportLibrary = true }
         // The name under the launcher icon; a side-by-side build (below) is called "Prism Dev" so it can't be mistaken for Prism.
         manifestPlaceholders["appLabel"] = "@string/app_name"
@@ -43,8 +45,8 @@ android {
         val localProps = Properties().apply {
             rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
         }
-        val cloudApiKey = localProps.getProperty("aftertone.cloud.apiKey", "")
-        val cloudDatabase = localProps.getProperty("aftertone.cloud.databaseUrl", "")
+        val cloudApiKey = if (aftertoneRelease) "" else localProps.getProperty("aftertone.cloud.apiKey", "")
+        val cloudDatabase = if (aftertoneRelease) "" else localProps.getProperty("aftertone.cloud.databaseUrl", "")
         check(cloudApiKey.matches(Regex("[A-Za-z0-9_-]*"))) { "Invalid Aftertone Firebase API key" }
         check(cloudDatabase.isEmpty() || cloudDatabase.matches(Regex("https://[a-z0-9.-]+"))) {
             "Invalid Aftertone database URL"
@@ -66,8 +68,13 @@ android {
     // Without it — or with -PdebugSign — they fall back to the debug key so anyone can build.
     val keyProps = Properties().apply {
         rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+        getProperty("aftertoneSigningProperties")?.let { path -> rootProject.file(path).inputStream().use { load(it) } }
     }
-    val useReleaseKey = keyProps.isNotEmpty() && !project.hasProperty("debugSign")
+    val useReleaseKey = keyProps.getProperty("storeFile") != null && !project.hasProperty("debugSign")
+    if (aftertoneRelease) {
+        check(useReleaseKey) { "Official Aftertone releases require the dedicated release keystore." }
+        check(!project.hasProperty("sideBySide")) { "An official Aftertone release uses its own fixed application ID." }
+    }
     signingConfigs {
         if (useReleaseKey) create("release") {
             storeFile = rootProject.file(keyProps.getProperty("storeFile"))
@@ -93,6 +100,8 @@ android {
             if (project.hasProperty("singBench")) isDebuggable = false
         }
         release {
+            // Keep the package ID of Aftertone installations made before the first public release.
+            if (aftertoneRelease) applicationIdSuffix = ".takeout"
             // Kept unminified: NewPipeExtractor + Rhino rely on reflection.
             isMinifyEnabled = false
             // `-Pr8` (1.7.4 trial, not for releases yet): R8 optimizes Prism's, Compose's and Kotlin's own code and keeps

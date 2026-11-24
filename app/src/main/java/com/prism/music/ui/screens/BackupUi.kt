@@ -2,15 +2,10 @@ package com.prism.music.ui.screens
 
 import com.prism.music.R
 import com.prism.music.tr
-import com.prism.music.ui.components.PrismButton
-import com.prism.music.ui.components.PrismOutlinedButton
-import com.prism.music.ui.components.PrismSwitch
 import com.prism.music.ui.components.PrismTextButton
-import com.prism.music.ui.theme.PrismIcons
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,11 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +34,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.prism.music.ui.theme.LocalContainer
 import kotlinx.coroutines.launch
-import java.io.File
 
 private fun backupName() = tr(R.string.prism_backup) + java.text.SimpleDateFormat(tr(R.string.yyyy_mm_dd), java.util.Locale.US).format(java.util.Date()) + ".zip"
 
@@ -173,60 +163,4 @@ private fun WorkingDialog(text: String) {
 fun WelcomeRestoreButton() {
     val restore = rememberRestoreFlow()
     PrismTextButton(onClick = restore, Modifier.fillMaxWidth()) { Text(tr(R.string.restore_from_a_backup), color = Color.White.copy(alpha = 0.8f)) }
-}
-
-/**
- * The new Prism is signed with a new key, so Android can't install it over this one. Three steps:
- * back up, keep the new Prism somewhere safe, uninstall this one; then open the saved file and restore.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun NewSignatureSheet(version: String, apk: File, onDismiss: () -> Unit) {
-    val c = LocalContainer.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var backedUp by remember { mutableStateOf(false) }
-    var saved by remember { mutableStateOf(false) }
-    val backup = rememberBackupFlow { if (it) backedUp = true }
-    val saveApk = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.android.package-archive")) { uri ->
-        if (uri != null) scope.launch {
-            runCatching { c.updates.saveApk(apk, uri) }
-                .onSuccess { saved = true }
-                .onFailure { Toast.makeText(context, tr(R.string.couldn_t_save_it, it.message), Toast.LENGTH_LONG).show() }
-        }
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(tr(R.string.moving_to_prism, version), style = MaterialTheme.typography.titleLarge)
-            Text(
-                tr(R.string.from_prism_is_signed_with_its_all, version),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Step(1, tr(R.string.back_up), tr(R.string.save_a_backup_downloads_is_a), backedUp) { backup() }
-            Step(2, tr(R.string.save_the_new_prism), tr(R.string.keep_prism_apk_next_to_it, version), saved) { saveApk.launch(tr(R.string.prism_apk, version)) }
-            Step(3, tr(R.string.uninstall_this_prism), tr(R.string.then_open_prism_apk_from_your, version), false, enabled = backedUp && saved) {
-                runCatching { context.startActivity(c.updates.uninstallIntent()) }.onFailure {
-                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${context.packageName}")))
-                }
-            }
-            Text(
-                tr(R.string.when_the_new_prism_opens_tap),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun Step(n: Int, title: String, detail: String, done: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text("$n. $title", style = MaterialTheme.typography.titleSmall)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.width(12.dp))
-        if (done) Icon(PrismIcons.Check, tr(R.string.done), tint = MaterialTheme.colorScheme.primary)
-        else if (n == 3) PrismButton(onClick = onClick, enabled = enabled) { Text(tr(R.string.uninstall)) }
-        else PrismOutlinedButton(onClick = onClick, enabled = enabled) { Text(if (n == 1) tr(R.string.back_up) else tr(R.string.save)) }
-    }
 }

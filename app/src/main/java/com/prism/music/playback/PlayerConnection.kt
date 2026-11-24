@@ -844,7 +844,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         if (service?.gentle(play) != true) { if (play) p.play() else p.pause() }
     }
 
-    fun next() = withPlayer { it.seekToNext() }
+    fun next() = withPlayer { if (service?.skipSingleForward() != true) it.seekToNext() }
     fun previous() = withPlayer { it.seekToPrevious() }
 
     /** Calls [done] once the player is reached (after commands asked for before it, such as a widget's), at once if it is. */
@@ -1147,6 +1147,10 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
 
     // ------------------------------------------------------------ State mirroring
 
+    internal fun refreshSkipCommands() {
+        player?.let { _hasNext.value = it.hasNextMediaItem() || service?.canContinueSingle() == true }
+    }
+
     private fun refresh() {
         val p = player ?: return
         val item = p.currentMediaItem
@@ -1161,7 +1165,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         _shuffle.value = p.shuffleModeEnabled
         _repeat.value = p.repeatMode
         _videoMode.value = item?.videoModeId != null
-        _hasNext.value = p.hasNextMediaItem()
+        refreshSkipCommands()
         _hasPrevious.value = p.hasPreviousMediaItem()
         // Keys stay stable when items move (id + occurrence), so a dragged row keeps its gesture.
         val seen = HashMap<String, Int>()

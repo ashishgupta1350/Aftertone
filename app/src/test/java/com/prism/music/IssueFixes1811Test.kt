@@ -146,14 +146,16 @@ class IssueFixes1811Test {
         assertEquals(0.5f, navBandColor(light = false).alpha, 0.01f)
     }
 
-    /** The update check's way round GitHub's API limit: the version from where "latest" redirects to. */
-    @Test fun theLatestVersionIsReadFromTheReleasePagesRedirect() {
-        val read = com.prism.music.data.UpdateChecker.Companion::versionFromLatestRedirect
-        assertEquals("1.8.1", read("https://github.com/Yigder/Prism/releases/tag/v1.8.1"))
-        assertEquals("1.8.1.1", read("https://github.com/Yigder/Prism/releases/tag/v1.8.1.1"))
-        assertEquals(null, read("https://github.com/Yigder/Prism/releases"))
-        assertEquals(null, read("https://github.com/login"))
-        assertEquals(null, read(null))
+    @Test fun onlyStableAftertoneReleaseApksAreOffered() {
+        val read = com.prism.music.data.UpdateChecker.Companion::releaseUpdate
+        val releases = "https://github.com/ashishgupta1350/Aftertone/releases"
+        assertEquals("1.9.0", read("v1.9.0", "$releases/download/v1.9.0/Aftertone.apk")?.version)
+        assertEquals("1.9.0.1", read("v1.9.0.1", "$releases/download/v1.9.0.1/Aftertone.apk")?.version)
+        assertEquals(null, read("v1.9.0-beta", "$releases/download/v1.9.0-beta/Aftertone.apk"))
+        assertEquals(null, read("v1.9.0", "$releases/download/v1.9.0/Prism.apk"))
+        assertEquals(null, read("v1.9.0", "https://github.com/Yigder/Prism/releases/download/v1.9.0/Prism.apk"))
+        assertEquals(null, read("v1.9.0", "$releases/download/v1.8.8/Aftertone.apk"))
+        assertEquals(null, read("v1.9.0", null))
     }
 
     @Test fun aHotfixCountsAsNewerThanItsRelease() {

@@ -352,9 +352,9 @@ fun SearchScreen(bottomPadding: Dp) {
             when (val r = top) {
                 null, Load.Loading -> LoadingState()
                 is Load.Err -> ErrorState(r.message)
-                is Load.Ok -> TopResults(r.value, live, inLibrary, onPhoneHits, lyricHits, bottomPadding, onSeeAll = { filter = it }, onSeePhone = { onPhone = true }, open = open, onSongs = { songs, i ->
+                is Load.Ok -> TopResults(r.value, live, inLibrary, onPhoneHits, lyricHits, bottomPadding, onSeeAll = { filter = it }, onSeePhone = { onPhone = true }, open = open, onSong = { song ->
                     saveQuery(live); focus.clearFocus()
-                    c.player.playQueue(songs, i, com.prism.music.playback.QueueSource(com.prism.music.playback.QueueKind.OTHER, tr(R.string.search)))
+                    c.player.playSingle(song)
                 }, onPlay = { item ->
                     saveQuery(live)
                     focus.clearFocus()
@@ -429,7 +429,7 @@ private fun PhoneResults(query: String, bottomPadding: Dp, onPlay: () -> Unit) {
                     com.prism.music.ui.components.SwipeToQueue(songs[i]) {
                         SongRow(songs[i], playing = current?.id == songs[i].id) {
                             onPlay()
-                            c.player.playQueue(songs, i, QueueSource(QueueKind.LIBRARY, tr(R.string.search_2, query)))
+                            c.player.playSingle(songs[i])
                         }
                     }
                 }
@@ -493,7 +493,7 @@ private fun TopResults(
     r: TopSearch, query: String, inLibrary: List<BrowseItem>, onPhoneHits: List<com.prism.music.data.model.Song>,
     lyricHits: List<com.prism.music.data.lyrics.LyricSearch.Hit>,
     bottomPadding: Dp, onSeeAll: (SearchFilter) -> Unit, onSeePhone: () -> Unit, open: (BrowseItem) -> Unit,
-    onSongs: (List<com.prism.music.data.model.Song>, Int) -> Unit, onPlay: (BrowseItem) -> Unit,
+    onSong: (com.prism.music.data.model.Song) -> Unit, onPlay: (BrowseItem) -> Unit,
 ) {
     // Lyric matches only when the search didn't find the song by its name: when the top card's title has half the words
     // typed or more ("the best you ever had" → "Tonight (Best You Ever Had)"), they were only clutter. Songs already
@@ -510,7 +510,7 @@ private fun TopResults(
     fun androidx.compose.foundation.lazy.LazyListScope.fromTheLyrics() {
         if (hits.isEmpty()) return
         item("lyr-h") { SectionHeader(tr(R.string.from_the_lyrics)) }
-        items(hits, key = { "lyr:" + it.song.id }) { h -> LyricHitRow(h) { onSongs(hitSongs, hitSongs.indexOf(h.song)) } }
+        items(hits, key = { "lyr:" + it.song.id }) { h -> LyricHitRow(h) { onSong(h.song) } }
     }
     // Select many (1.8.3): every song row shown here is what "All" picks.
     val shownSongs = (hitSongs + inLibrary.filterIsInstance<SongItem>().map { it.song } + onPhoneHits +
@@ -529,7 +529,7 @@ private fun TopResults(
         }
         if (onPhoneHits.isNotEmpty()) {
             item("phone-h") { SectionHeader(tr(R.string.on_this_phone), onMore = onSeePhone) }
-            items(onPhoneHits, key = { "ph:" + it.id }) { s -> SongRow(s) { onSongs(onPhoneHits, onPhoneHits.indexOf(s)) } }
+            items(onPhoneHits, key = { "ph:" + it.id }) { s -> SongRow(s) { onSong(s) } }
         }
         r.sections.forEach { (f, items) ->
             item("h:${f.name}") { SectionHeader(f.label, onMore = { onSeeAll(f) }) }
@@ -537,7 +537,7 @@ private fun TopResults(
                 SearchFilter.SONGS -> {
                     val songs = items.filterIsInstance<SongItem>().map { it.song }.distinctBy { it.id }
                     items(songs.take(4), key = { "s:" + it.id }) { s ->
-                        SongRow(s) { onSongs(songs, songs.indexOf(s)) }
+                        SongRow(s) { onSong(s) }
                     }
                 }
                 else -> item("c:${f.name}") {
