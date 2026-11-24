@@ -86,6 +86,7 @@ private data class SavedQueue(
     // Shuffle (with its order) and repeat, so a restart keeps them (#101: shuffle was off again after Prism restarted).
     val shuffle: Boolean = false, val shuffleOrder: List<Int> = emptyList(), val repeat: Int = Player.REPEAT_MODE_OFF,
     val radioSeed: String? = null, val songRadio: Boolean = false,
+    val relatedStart: Int = -1,
 )
 
 @OptIn(UnstableApi::class)
@@ -714,7 +715,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             }
         }
         continueVideo()
-        maybeAutoplay()
+        maybeAutoplay(initial = reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED)
         prefetchNext()
         songCoverForVideo(song)
         albumForSong(song)
@@ -1494,17 +1495,18 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
     private var pendingRadioSkip: Job? = null
 
     /**
-     * With Autoplay on, keeps the queue topped up with YouTube Music radio
-     * suggestions as it nears its end: seeded by the song for a single-song
-     * play, or by the last track of an album / playlist.
+     * Starts a standalone song with a batch of related tracks. Autoplay and song radio can also
+     * refill the queue near its end. Next can request another batch when the standalone queue runs out.
      */
-    fun maybeAutoplay(requested: Boolean = false) {
+    fun maybeAutoplay(requested: Boolean = false, initial: Boolean = false) {
         val src = c.queue.source.value
         // Still looking for a queue that's been replaced, whoever replaced it (a car, a watch, a spoken request).
         if (autoplayJob != null && autoplayFor !== src) dropAutoplay()
         // A song's radio (Quick picks, "Radio" in a song's menu) keeps going whether or not Autoplay is on: that's what it is.
         val radio = src.isSongRadio
-        fun mayLoad() = requested || radio || c.settings.current.autoplay
+        val starterMix = initial && src.kind == QueueKind.SINGLE && player.mediaItemCount == 1 &&
+            player.currentMediaItem?.mediaId == src.seedId
+        fun mayLoad() = starterMix || requested || radio || c.settings.current.autoplay
         if (!mayLoad() || player.mediaItemCount == 0 || c.queue.followingHost || c.queue.filling) return
         // No music radio after a podcast episode.
         if (player.currentMediaItem?.toSong()?.let { it.isEpisode || it.isLive } == true) return
@@ -1609,13 +1611,12 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             if (answer.add.isNotEmpty()) {
                 if (c.queue.autoplayStart.value < 0) c.queue.autoplayStart.value = player.mediaItemCount
                 val resumeAtEnd = isStandalone && player.playbackState == Player.STATE_ENDED && player.playWhenReady
-                val additions = if (requested && !radio && !c.settings.current.autoplay) answer.add.take(1) else answer.add
-                player.addMediaItems(additions.map { it.toMediaItem() })
+                player.addMediaItems(answer.add.map { it.toMediaItem() })
                 if (resumeAtEnd) {
                     val next = nextWithoutRepeat()
                     if (next != C.INDEX_UNSET) player.seekToDefaultPosition(next)
                 }
-                fb.served(additions.map { it.id })
+                fb.served(answer.add.map { it.id })
                 if (answer.cameRound) c.player.reportError(tr(R.string.no_repeats_ran_out))
             }
         }
@@ -1644,7 +1645,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
         c.queue.autoplayLoading = false
     }
 
-    /** Switching Autoplay off takes its suggestions back out of the queue; on, fetches them. */
+    /** Switching Autoplay off keeps standalone mixes and removes pending suggestions from regular queues. */
     private fun onAutoplayChanged(enabled: Boolean) {
         if (enabled) {
             maybeAutoplay()
@@ -1652,7 +1653,8 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             c.player.refreshSkipCommands()
             return
         }
-        if (c.queue.source.value.isSongRadio) return
+        val source = c.queue.source.value
+        if (source.isSongRadio || source.kind == QueueKind.SINGLE) return
         dropAutoplay()
         sessionPlayer.updateSkipCommands()
         c.player.refreshSkipCommands()
@@ -2583,6 +2585,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             shuffle = player.shuffleModeEnabled, shuffleOrder = order, repeat = player.repeatMode,
             radioSeed = source.seedId.takeIf { source.kind == QueueKind.SINGLE || source.isSongRadio },
             songRadio = source.isSongRadio,
+            relatedStart = c.queue.autoplayStart.value.takeIf { source.kind == QueueKind.SINGLE && songs.size == player.mediaItemCount } ?: -1,
         )
         val text = InnerTube.json.encodeToString(SavedQueue.serializer(), q)
         placeKeeper.saved(currentPlace())
@@ -2621,6 +2624,7 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             return
         }
         c.queue.source.value = savedQueueSource(q)
+        c.queue.autoplayStart.value = q.relatedStart.takeIf { it in 1 until q.songs.size } ?: -1
         val (index, position) = PlaceKeeper.start(q.songs.map { it.id }, q.index, q.positionMs, keptPlace(), placeIsNewer = true)
         player.setMediaItems(q.songs.map { it.toMediaItem() }, index.coerceIn(0, q.songs.lastIndex), position)
         // Shuffle and repeat as they were, in the same order.
@@ -2950,7 +2954,10 @@ open class PlaybackService : MediaLibraryService(), Player.Listener {
             }
             val (q, place) = withContext(Dispatchers.IO) { readQueue() to keptPlace() }
             if (q != null && q.songs.isNotEmpty()) {
-                if (isForPlayback) setControllerQueue(savedQueueSource(q))
+                if (isForPlayback) {
+                    setControllerQueue(savedQueueSource(q))
+                    c.queue.autoplayStart.value = q.relatedStart.takeIf { it in 1 until q.songs.size } ?: -1
+                }
                 val (index, position) = PlaceKeeper.start(q.songs.map { it.id }, q.index, q.positionMs, place, placeIsNewer = true)
                 return@future MediaSession.MediaItemsWithStartPosition(q.songs.map { it.toMediaItem() }, index.coerceIn(0, q.songs.lastIndex), position)
             }

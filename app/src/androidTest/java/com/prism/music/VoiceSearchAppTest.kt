@@ -92,6 +92,27 @@ class VoiceSearchAppTest {
         waitFor(20_000) { player.currentSong.value?.id == songs[1].id }
     }
 
+    @Test fun oneSongQueuesSeveralRelatedTracksBeforeNextWithAutoplayOff() {
+        val songs = setUp(toneSeconds = 90, names = listOf("one", "two", "three", "four"))
+        val c = Fixture.container
+        val player = c.player
+        c.settings.setAutoplay(false)
+        c.settings.setAutoplaySource(com.prism.music.data.prefs.AutoplaySource.YOURS)
+        waitFor(10_000) { !c.settings.current.autoplay && c.settings.current.autoplaySource == com.prism.music.data.prefs.AutoplaySource.YOURS }
+        val main = InstrumentationRegistry.getInstrumentation()
+        main.runOnMainSync { player.playSingle(songs.first()) }
+        waitFor(20_000) { player.currentSong.value?.id == songs.first().id && player.upNext.value.size == 3 }
+        var selectedId = ""
+        main.runOnMainSync {
+            val upcoming = player.upNext.value
+            assertEquals(songs.drop(1).map { it.id }.toSet(), upcoming.map { player.queue.value[it].song.id }.toSet())
+            val selected = upcoming[1]
+            selectedId = player.queue.value[selected].song.id
+            player.skipTo(selected)
+        }
+        waitFor(10_000) { player.currentSong.value?.id == selectedId }
+    }
+
     @Test fun theCarsVoiceRequestPlaysYourPlaylistByName() {
         val songs = setUp()
         val controller = MediaController(Fixture.context, connect().sessionToken)
@@ -163,17 +184,16 @@ class VoiceSearchAppTest {
         assertEquals(LIST, Fixture.container.queue.source.value.title)
     }
 
-    /** Two silent songs on the phone, in a Prism playlist; Prism open. */
-    private fun setUp(toneSeconds: Int = 60): List<Song> {
+    /** Silent songs on the phone, in a Prism playlist; Prism open. */
+    private fun setUp(toneSeconds: Int = 60, names: List<String> = listOf("one", "two")): List<Song> {
         Fixture.ready()
         val perm = if (android.os.Build.VERSION.SDK_INT >= 33) android.Manifest.permission.READ_MEDIA_AUDIO else android.Manifest.permission.READ_EXTERNAL_STORAGE
         InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(Fixture.context.packageName, perm)
-        tones += Fixture.tone("Prism voice tone one", toneSeconds)
-        tones += Fixture.tone("Prism voice tone two", toneSeconds)
+        for (name in names) tones += Fixture.tone("Prism voice tone $name", toneSeconds)
         Fixture.launch()
         val local = Fixture.container.localMusic
         runBlocking { local.scan() }
-        val songs = listOf("one", "two").map { w -> local.tracks.value.first { it.song.title == "Prism voice tone $w" }.song }
+        val songs = names.map { name -> local.tracks.value.first { it.song.title == "Prism voice tone $name" }.song }
         Fixture.prismPlaylist(LIST, songs)
         return songs
     }

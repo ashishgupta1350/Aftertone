@@ -2686,6 +2686,7 @@
     <string name="use_mobile_data">Use mobile data</string>
     <string name="removed">Removed “%1$s”</string>
     <string name="similar_music_plays_next">Similar music plays next</string>
+    <string name="aftertone_related_songs">Related songs</string>
     <string name="similar_music_will_play_after_your">Similar music will play after your queue</string>
     <string name="opus">Opus</string>
     <string name="vorbis">Vorbis</string>

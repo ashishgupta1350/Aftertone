@@ -57,6 +57,7 @@ import coil3.compose.AsyncImage
 import com.prism.music.data.model.Song
 import com.prism.music.data.model.hiRes
 import com.prism.music.playback.QueueEntry
+import com.prism.music.playback.QueueKind
 import com.prism.music.ui.theme.LocalContainer
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -269,7 +270,7 @@ fun InlineQueue(onRevealPlayer: () -> Unit, onHidePlayer: () -> Unit, modifier: 
                 queueSection(upcoming, shuffled, badge = badge, onRemove = remove, rows = rows)
             }
             if (settings.autoplay || autoplay.isNotEmpty()) {
-                item(key = "h-auto") { AutoplayHeading(autoplay.isNotEmpty()) }
+                item(key = "h-auto") { AutoplayHeading(autoplay.isNotEmpty(), source.kind == QueueKind.SINGLE) }
                 queueSection(autoplay, shuffled, badge = badge, onRemove = remove, rows = rows)
             }
         }
@@ -469,16 +470,18 @@ private fun Heading(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AutoplayHeading(hasTracks: Boolean) {
+private fun AutoplayHeading(hasTracks: Boolean, standalone: Boolean) {
     Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(PrismIcons.Autoplay, null, tint = Color.White.copy(alpha = 0.75f), modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Column {
-            Text(tr(R.string.autoplay), style = MaterialTheme.typography.titleMedium, color = Color.White)
-            Text(
-                if (hasTracks) tr(R.string.similar_music_plays_next) else tr(R.string.similar_music_will_play_after_your),
-                style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f),
-            )
+            Text(tr(if (standalone) R.string.aftertone_related_songs else R.string.autoplay), style = MaterialTheme.typography.titleMedium, color = Color.White)
+            if (!standalone) {
+                Text(
+                    if (hasTracks) tr(R.string.similar_music_plays_next) else tr(R.string.similar_music_will_play_after_your),
+                    style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f),
+                )
+            }
         }
     }
 }

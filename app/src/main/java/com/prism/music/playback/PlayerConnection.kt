@@ -599,7 +599,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
                 // Its picks now: the service's Smart Shuffle collector never saw it go off and on again above.
                 c.queue.smartStarted.value++
             }
-            service?.maybeAutoplay()
+            service?.maybeAutoplay(initial = true)
             if (dj) c.dj.setOn(true)
             if (rest != null && token == playToken) fillQueue(rest, source, songs)
         }
@@ -818,6 +818,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
     /** Takes everything after the current song out of the queue. */
     fun clearUpcoming() = withPlayer { p ->
         stopFill()
+        service?.dropAutoplay()
         val i = p.currentMediaItemIndex
         if (i + 1 < p.mediaItemCount) p.removeMediaItems(i + 1, p.mediaItemCount)
         c.queue.autoplayStart.value = -1
@@ -972,6 +973,7 @@ class PlayerConnection(private val context: Context, private val c: AppContainer
         val at = order.indexOf(index)
         if (at < 0) return@withPlayer
         stopFill()
+        service?.dropAutoplay()
         removeMany(order.drop(at + 1))
     }
 
