@@ -1,0 +1,1052 @@
+/* UI UX Pro Max accessibility and mobile layout pass.
+ * 16 px body, 14 px secondary, 12 px captions; 48 px minimum touch areas.
+ * A glass bezel surrounds the glyph, so it needs a 48–56 px surface to show
+ * a standard 24 px symbol clearly. The device itself is never scaled down.
+ */
+.phone[data-template] {
+  --text-body: 16px;
+  --text-secondary: 14px;
+  --text-caption: 12px;
+  --control-size: 48px;
+  --glass-control-size: 56px;
+  --content-gutter: 24px;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  zoom: 1;
+}
+.studio-header {
+  min-height: 72px;
+  height: auto;
+  gap: 16px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.studio-actions {
+  gap: 8px;
+}
+.studio-button {
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 10px 16px;
+  gap: 12px;
+}
+.studio-label {
+  font-size: 12px;
+  letter-spacing: 1.4px;
+}
+.version {
+  font-size: 11px;
+}
+.workspace {
+  align-items: start;
+  padding-top: 16px;
+  gap: 40px;
+}
+.design-note,
+.component-index {
+  align-self: start;
+  padding-top: 64px;
+}
+.design-note .eyebrow,
+.component-index .eyebrow {
+  font-size: 11px;
+  line-height: 1.6;
+  letter-spacing: 1.4px;
+}
+.design-description {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.desktop-templates button {
+  font-size: 14px;
+  min-height: 48px;
+  max-width: 100%;
+}
+.desktop-templates button > span:first-child {
+  font-size: 12px;
+}
+.palette-option {
+  min-height: 44px;
+  padding: 6px 0;
+  font-size: 14px;
+}
+.palette-swatch {
+  width: 30px;
+  height: 30px;
+}
+.reference-note p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.component-links > button {
+  min-height: 72px;
+  font-size: 14px;
+  gap: 12px;
+}
+.component-links small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.component-links > button > span:first-child {
+  font-size: 11px;
+}
+.all-components {
+  min-height: 48px;
+  font-size: 14px;
+}
+.stage-note {
+  font-size: 11px;
+}
+.stage-note span {
+  font-size: 12px;
+}
+.preview-area {
+  gap: 12px;
+}
+.preview-nav {
+  width: 100%;
+  max-width: 390px;
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+}
+.preview-nav button {
+  min-height: 44px;
+  padding: 10px 8px;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.preview-caption {
+  max-width: 390px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #c9b9d2;
+}
+#active-template-label {
+  min-height: 44px;
+  font-size: 12px;
+  padding: 10px 0;
+}
+.compact-palettes {
+  gap: 4px;
+  margin-left: 0;
+}
+.compact-palettes button {
+  width: 44px;
+  height: 44px;
+  border: 10px solid transparent;
+  background-clip: padding-box !important;
+}
+.compact-palettes button[aria-pressed="true"]:after {
+  inset: 6px;
+}
+.studio-footer {
+  font-size: 11px;
+  line-height: 18px;
+}
+.studio-footer > span:nth-child(2) {
+  font-size: 12px;
+}
+
+/* Shared Android header and spacing. */
+.phone[data-template]
+  #library-results
+  > .library-section:first-child
+  .section-heading {
+  margin-top: 0;
+}
+.phone[data-template] .library-section + .library-section {
+  margin-top: 24px;
+}
+@media (max-width: 400px) {
+  .preview-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.phone[data-template] .status-bar {
+  height: 40px;
+  padding: 10px 24px 0;
+  font-size: 12px;
+}
+.phone[data-template] .screen {
+  height: calc(100% - 60px);
+  overflow: clip;
+}
+.phone[data-template] .mobile-header {
+  height: 56px;
+  min-height: 56px;
+  gap: 8px;
+  margin: 0 -8px;
+}
+.phone[data-template] .header-identity {
+  gap: 2px;
+  min-width: 0;
+}
+.phone[data-template] .header-identity span {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.phone[data-template] .header-identity small {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 1px;
+  opacity: 1;
+}
+.phone[data-template] .icon-button {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+}
+.phone[data-template] .icon-button .icon {
+  width: 24px;
+  height: 24px;
+}
+.phone[data-template] .icon-button .rosemary-icon {
+  width: 56px;
+  height: 56px;
+}
+.phone[data-template] .mobile-header .icon-button .rosemary-icon {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .icon-button:hover .rosemary-icon {
+  transform: none;
+}
+.phone[data-template] .icon-button.active:after {
+  bottom: 0;
+}
+.phone[data-template] .avatar {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  font-size: 16px;
+}
+.phone[data-template] .browse-content {
+  min-height: 0;
+  padding: 16px var(--content-gutter) 24px;
+  scrollbar-gutter: stable;
+}
+.phone[data-template] .browse-header {
+  margin: 0 0 24px;
+  align-items: center;
+  gap: 12px;
+}
+.phone[data-template] .browse-header small {
+  font-size: 14px;
+  line-height: 21px;
+  letter-spacing: 0;
+  margin-bottom: 4px;
+}
+.phone[data-template] .browse-header h1 {
+  font-size: 28px;
+  line-height: 36px;
+  letter-spacing: -0.7px;
+  font-weight: 600;
+}
+.phone[data-template] .filter-pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.phone[data-template] .filter-pills button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.phone[data-template] .feature-card {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  min-height: 320px;
+  padding: 24px;
+  aspect-ratio: 1.08;
+}
+.phone[data-template] .feature-card:before {
+  background: linear-gradient(0deg, #120b1cf2, #120b1c33 80%);
+}
+.phone[data-template] .feature-card .eyebrow {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 1px;
+  font-weight: 600;
+  color: #fff5fb;
+  background: #140a1bc9;
+  padding: 6px 8px;
+  border-radius: 8px;
+  max-width: 100%;
+}
+.phone[data-template] .feature-card h2 {
+  margin: auto 0 12px;
+  padding-top: 24px;
+  font-size: 32px;
+  line-height: 1.15;
+  letter-spacing: -1px;
+}
+.phone[data-template] .feature-card p {
+  font-size: 16px;
+  line-height: 24px;
+  color: #fff4fb;
+  max-width: calc(100% - 68px);
+}
+.phone[data-template] .feature-play {
+  width: 64px;
+  height: 64px;
+  right: 16px;
+  bottom: 24px;
+}
+.phone[data-template] .feature-play .icon {
+  width: 28px;
+  height: 28px;
+}
+.phone[data-template] .feature-play .rosemary-icon {
+  width: 64px;
+  height: 64px;
+}
+.phone[data-template] .section-heading {
+  gap: 12px;
+  margin: 24px 0 16px;
+  min-height: 44px;
+}
+.phone[data-template] .section-heading h2 {
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.35px;
+  font-weight: 600;
+}
+.phone[data-template] .section-heading button {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 12px 0 12px 8px;
+  min-height: 44px;
+}
+.phone[data-template] .album-grid {
+  gap: 16px;
+}
+.phone[data-template] .album-tile strong {
+  font-size: 16px;
+  line-height: 24px;
+  margin: 12px 0 4px;
+}
+.phone[data-template] .album-tile small {
+  display: block;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+/* Persistent compact controls and navigation use the same type and target scale. */
+.phone[data-template] .mini-player {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 48px 48px;
+  gap: 8px;
+  min-height: 80px;
+  margin: 0 12px 8px;
+  padding: 10px 8px;
+}
+.phone[data-template] .mini-art {
+  display: grid;
+  align-items: center;
+  min-height: 48px;
+}
+.phone[data-template] .mini-art img {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .mini-info {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+}
+.phone[data-template] .mini-info strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .mini-info small {
+  font-size: 14px;
+  line-height: 20px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.phone[data-template] .mini-player > .icon-button {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .mini-player > .icon-button .rosemary-icon {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .bottom-nav {
+  height: 88px;
+  min-height: 88px;
+  padding: 4px 8px 8px;
+  gap: 8px;
+}
+.phone[data-template] .bottom-nav button {
+  gap: 2px;
+  min-width: 0;
+  min-height: 72px;
+  flex: 1;
+  padding: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.phone[data-template] .bottom-nav .icon {
+  width: 24px;
+  height: 24px;
+  margin: 12px 0;
+}
+.phone[data-template] .bottom-nav .rosemary-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0;
+}
+.phone[data-template] .bottom-nav button[aria-pressed="true"]:after {
+  right: 12px;
+  top: 6px;
+}
+.phone[data-template] .search-field {
+  min-height: 56px;
+  padding: 0 12px;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.phone[data-template] .search-field input {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .search-field .icon {
+  width: 24px;
+  height: 24px;
+}
+.phone[data-template] .search-field .rosemary-icon {
+  width: 40px;
+  height: 40px;
+}
+.phone[data-template] .playlist-row {
+  gap: 16px;
+  min-height: 88px;
+  padding: 12px 0;
+}
+.phone[data-template] .playlist-row strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .playlist-row small {
+  font-size: 14px;
+  line-height: 21px;
+  margin-top: 4px;
+}
+.phone[data-template] .playlist-row > .icon {
+  width: 24px;
+  height: 24px;
+}
+.phone[data-template] .playlist-row > .rosemary-icon {
+  width: 32px;
+  height: 32px;
+}
+.phone[data-template] .playlist-art {
+  width: 64px;
+  height: 64px;
+}
+.phone[data-template] .liked-art .rosemary-icon {
+  width: 56px;
+  height: 56px;
+}
+.phone[data-template] .collection-header h2 {
+  font-size: 28px;
+  line-height: 36px;
+}
+.phone[data-template] .collection-header p {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .primary-pill {
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 24px;
+  padding: 8px 20px;
+}
+.phone[data-template] .primary-pill .rosemary-icon {
+  width: 40px;
+  height: 40px;
+}
+.phone[data-template] .track-row {
+  min-height: 72px;
+  gap: 12px;
+  padding: 12px 4px;
+}
+.phone[data-template] .track-row > img {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .track-row .track-row-title {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .track-row .track-row-artist {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .track-row-time {
+  font-size: 12px;
+  line-height: 18px;
+}
+.phone[data-template] .library-count {
+  font-size: 14px;
+  line-height: 21px;
+  margin-bottom: 12px;
+}
+.phone[data-template] .empty-state {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+/* A flexible cover absorbs short-screen changes instead of shrinking the UI. */
+.phone[data-template] .player-screen {
+  display: grid;
+  grid-template-rows: 56px minmax(128px, 1fr) 76px 64px 80px 148px;
+  min-height: 0;
+  padding: 0 24px;
+}
+.phone[data-template] .player-screen > .artwork {
+  align-self: center;
+  justify-self: center;
+  height: min(calc(100% - 16px), 304px);
+  width: auto;
+  max-width: 100%;
+  max-height: 304px;
+  min-height: 0;
+  margin: 0;
+  aspect-ratio: 1;
+}
+.phone[data-template] .artwork .favorite {
+  width: 56px;
+  height: 56px;
+  right: 8px;
+  bottom: 8px;
+}
+.phone[data-template] .artwork .favorite .icon {
+  width: 24px;
+  height: 24px;
+}
+.phone[data-template] .artwork .favorite .rosemary-icon {
+  width: 56px;
+  height: 56px;
+}
+.phone[data-template] .artwork .art-badge {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.5px;
+  padding: 5px 8px;
+  bottom: 12px;
+  left: 12px;
+  background: #170e25d9;
+  color: #fff4fb;
+}
+.phone[data-template].compact-player .artwork .art-badge {
+  display: none;
+}
+.phone[data-template] .track-info {
+  min-height: 76px;
+  padding: 4px 0;
+  align-self: center;
+}
+.phone[data-template] .track-overline {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+.phone[data-template] .track-info h1 {
+  font-size: 26px;
+  line-height: 32px;
+  letter-spacing: -0.6px;
+}
+.phone[data-template] .track-info p {
+  font-size: 16px;
+  line-height: 24px;
+  margin-top: 0;
+}
+.phone[data-template] .scrubber {
+  margin-top: 0;
+}
+.phone[data-template] .range {
+  height: 44px;
+}
+.phone[data-template] .timestamps {
+  font-size: 12px;
+  line-height: 18px;
+}
+.phone[data-template] .transport {
+  height: 80px;
+  gap: 8px;
+  margin: 0 -8px;
+}
+.phone[data-template] .transport > .icon-button {
+  width: 48px;
+  height: 56px;
+}
+.phone[data-template] .transport > .icon-button .rosemary-icon {
+  width: 56px;
+  height: 56px;
+}
+.phone[data-template] .transport > .play-button {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+.phone[data-template] .transport .play-button .rosemary-icon {
+  width: 80px !important;
+  height: 80px !important;
+}
+.phone[data-template] .player-bottom {
+  display: grid;
+  grid-template-rows: 80px 48px;
+  gap: 8px;
+  height: 148px;
+  margin-top: 0;
+  padding-top: 8px;
+}
+.phone[data-template] .utility-dock {
+  height: 80px;
+  padding: 4px;
+  gap: 8px;
+}
+.phone[data-template] .utility-dock .icon-button {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  width: auto;
+  flex: 1;
+  height: 70px;
+  min-width: 48px;
+}
+.phone[data-template] .utility-dock .icon {
+  width: 24px;
+  height: 24px;
+  margin: 12px 0;
+}
+.phone[data-template] .utility-dock .rosemary-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+}
+.phone[data-template] .tool-label {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--ink);
+}
+.phone[data-template] .volume {
+  height: 48px;
+  gap: 8px;
+  margin: 0 -8px;
+}
+.phone[data-template] .volume .icon-button {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .volume .rosemary-icon {
+  width: 40px;
+  height: 40px;
+}
+.phone[data-template] .listening-status {
+  display: none;
+}
+
+/* The same standards apply to sheets, settings, and component specimens. */
+.phone[data-template] .sheet {
+  padding: 0 20px 28px;
+  max-height: 94%;
+}
+.phone[data-template] .sheet-header {
+  min-height: 72px;
+  margin: 0 -4px 8px 0;
+  gap: 12px;
+}
+.phone[data-template] .sheet-header h2 {
+  font-size: 22px;
+  line-height: 30px;
+}
+.phone[data-template] .sheet-header p {
+  font-size: 14px;
+  line-height: 21px;
+  margin-top: 4px;
+}
+.phone[data-template] .sheet-header .icon-button {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .sheet-header .rosemary-icon {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .sheet-section-label {
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.8px;
+  margin: 20px 0 12px;
+}
+.phone[data-template] .sheet-footnote {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .sheet-action-row > span {
+  font-size: 14px !important;
+  line-height: 21px;
+  color: var(--muted);
+}
+.phone[data-template] .settings-row {
+  min-height: 80px;
+  gap: 12px;
+  padding: 12px 0;
+}
+.phone[data-template] .settings-row > .rosemary-icon {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .settings-row strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .settings-row small {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .settings-row > .trailing {
+  font-size: 14px;
+}
+.phone[data-template] .settings-row > .trailing > .rosemary-icon {
+  width: 28px;
+  height: 28px;
+}
+.phone[data-template] .sheet-palette {
+  min-height: 80px;
+  padding: 12px;
+  gap: 12px;
+}
+.phone[data-template] .sheet-palette strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .sheet-palette small {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .sheet-palette > .rosemary-icon {
+  width: 32px;
+  height: 32px;
+}
+.phone[data-template] .palette-preview {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+}
+.phone[data-template] .queue-now {
+  padding: 12px;
+  gap: 12px;
+}
+.phone[data-template] .queue-now strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .queue-now small {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .queue-row > .icon-button {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .queue-row > .icon-button .rosemary-icon {
+  width: 40px;
+  height: 40px;
+}
+.phone[data-template] .text-button {
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.phone[data-template] .preset-pills {
+  gap: 8px;
+}
+.phone[data-template] .preset-pills button {
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 10px 12px;
+}
+.phone[data-template] .eq-band label,
+.phone[data-template] .eq-band output {
+  font-size: 12px;
+  line-height: 18px;
+}
+.phone[data-template] .eq-chart {
+  gap: 4px;
+}
+.phone[data-template] .eq-band {
+  width: 44px;
+}
+.phone[data-template] .eq-band input {
+  width: 44px;
+}
+.phone[data-template] .sleep-options button {
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .lyrics-intro,
+.phone[data-template] .lyrics-timing {
+  font-size: 12px;
+  line-height: 18px;
+}
+.phone[data-template] .toast {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .kit-content {
+  min-height: 0;
+  padding: 0 24px 24px;
+}
+.phone[data-template] .kit-intro,
+.phone[data-template] .kit-art-row p {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .kit-label {
+  font-size: 12px;
+  line-height: 18px;
+  margin: 24px 0 16px;
+  letter-spacing: 0.5px;
+}
+.phone[data-template] .kit-label span {
+  font-size: 12px;
+  line-height: 18px;
+}
+.phone[data-template] .kit-card {
+  padding: 16px;
+}
+.phone[data-template] .kit-card .track-info {
+  min-height: 76px;
+}
+.phone[data-template] .kit-card .track-info h1 {
+  font-size: 24px;
+  line-height: 32px;
+}
+.phone[data-template] .kit-card .transport {
+  gap: 4px;
+  margin: 0 -16px;
+}
+.phone[data-template] .kit-card .transport > .play-button {
+  width: 72px;
+  height: 72px;
+}
+.phone[data-template] .kit-card .transport > .play-button .rosemary-icon {
+  width: 72px !important;
+  height: 72px !important;
+}
+.phone[data-template] .kit-card .transport > .icon-button .rosemary-icon {
+  width: 48px;
+  height: 48px;
+}
+.phone[data-template] .kit-content .mini-player {
+  margin-left: 0;
+  margin-right: 0;
+}
+.phone[data-template] .icon-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 8px;
+}
+.phone[data-template] .icon-grid > div {
+  min-width: 0;
+  gap: 8px;
+}
+.phone[data-template] .icon-grid .icon {
+  width: 32px;
+  height: 32px;
+}
+.phone[data-template] .icon-grid .rosemary-icon {
+  width: 64px;
+  height: 64px;
+}
+.phone[data-template] .icon-grid small {
+  font-size: 14px;
+  line-height: 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.phone[data-template] .kit-palette-row > button {
+  min-height: 80px;
+  font-size: 12px;
+  line-height: 18px;
+  padding: 12px 4px;
+}
+.phone[data-template] .kit-bottom-note {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .template-card-info strong {
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .template-card-info strong > span {
+  font-size: 12px;
+}
+.phone[data-template] .template-card-info small {
+  font-size: 14px;
+  line-height: 21px;
+}
+.phone[data-template] .template-card-info {
+  padding: 16px 48px 16px 16px;
+}
+.phone[data-template] .template-card.rosemary .template-card-preview > .icon {
+  width: 64px !important;
+  height: 64px !important;
+}
+.phone[data-template] .shape-options button {
+  min-width: 0;
+  min-height: 100px;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 20px;
+  gap: 8px;
+}
+.phone[data-template] .shape-options .rosemary-icon {
+  width: 48px !important;
+  height: 48px !important;
+}
+.phone[data-template] .template-icon-link {
+  min-height: 56px;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 24px;
+}
+.phone[data-template] .template-icon-link > .rosemary-icon {
+  width: 40px;
+  height: 40px;
+}
+.phone[data-template] .template-icon-link > .rosemary-icon:last-child {
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 760px) {
+  .studio-header {
+    min-height: 64px;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+  .studio-header .wordmark {
+    font-size: 22px;
+  }
+  .studio-actions .studio-button {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .studio-actions .studio-button > span[aria-hidden="true"] {
+    display: none;
+  }
+  .workspace {
+    padding: 16px 12px 24px;
+  }
+  .preview-caption {
+    gap: 8px;
+  }
+  .compact-palettes {
+    flex-basis: 100%;
+    justify-content: center;
+  }
+}
+@media (max-width: 360px) {
+  .studio-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .studio-header .wordmark {
+    font-size: 20px;
+  }
+  .phone[data-template] {
+    --content-gutter: 16px;
+  }
+  .phone[data-template] .browse-header h1 {
+    font-size: 26px;
+    line-height: 34px;
+  }
+  .phone[data-template] .mini-player {
+    grid-template-columns: 40px minmax(0, 1fr) 48px 48px;
+    gap: 8px;
+    margin-left: 8px;
+    margin-right: 8px;
+  }
+  .phone[data-template] .mini-art img {
+    width: 40px;
+    height: 40px;
+  }
+  .phone[data-template] .mini-info strong {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .phone[data-template] .mini-info small {
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .phone[data-template] .bottom-nav button {
+    font-size: 12px;
+  }
+  .phone[data-template] .player-screen {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .phone[data-template] .transport {
+    gap: 4px;
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+  .phone[data-template] .transport > .play-button {
+    width: 72px;
+    height: 72px;
+  }
+  .phone[data-template] .transport .play-button .rosemary-icon {
+    width: 72px !important;
+    height: 72px !important;
+  }
+  .phone[data-template] .transport > .icon-button .rosemary-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .phone[data-template] .kit-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .phone[data-template] .kit-card:has(> .transport) {
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 12px 0;
+  }
+  .phone[data-template] .kit-card .transport {
+    margin: 0;
+  }
+  .phone[data-template] .kit-card .transport > .play-button {
+    width: 64px;
+    height: 64px;
+  }
+  .phone[data-template] .kit-card .transport > .play-button .rosemary-icon {
+    width: 64px !important;
+    height: 64px !important;
+  }
+}

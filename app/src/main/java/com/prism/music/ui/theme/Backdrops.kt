@@ -308,6 +308,15 @@ fun StatusBarIcons(lightBar: Boolean) {
 fun ScreenBackdrop(screen: BackdropScreen, content: @Composable BoxScope.() -> Unit) {
     val c = LocalContainer.current
     val s by c.settings.flow.collectAsState()
+    if (s.appTemplate != com.prism.music.data.prefs.AppTemplate.ORIGINAL) {
+        Box(Modifier.fillMaxSize()) {
+            PrototypeBackdrop()
+            Box(Modifier.fillMaxSize().padding(start = LocalChromeStart.current)) {
+                CompositionLocalProvider(LocalFrosted provides false, LocalChromeStart provides 0.dp) { content() }
+            }
+        }
+        return
+    }
     val (style, photo) = Backdrop.parse(s.backdrops[screen.name])
     // #413: a solid color is that color exactly, with nothing over it (no wash, no blur, nothing moving): one fill.
     val solid = if (style == Backdrop.COLOR) Backdrop.solidColor(photo) else null

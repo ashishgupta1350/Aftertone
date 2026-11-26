@@ -489,6 +489,11 @@ val LocalPageBackdrop = compositionLocalOf<PageBackdrop?> { null }
  */
 @Composable
 fun Modifier.pane(shape: Shape, fallback: Color = Color.Unspecified): Modifier {
+    if (com.prism.music.ui.theme.LocalAppSettings.current.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID) {
+        val paper = androidx.compose.foundation.shape.RoundedCornerShape(5.dp)
+        return clip(paper).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outline, paper)
+    }
     if (LocalFrosted.current) {
         val dark = LocalIsDark.current
         // #326, "Glass on more of the screen": a light falling on it from above and a brighter edge, no blur. Only the

@@ -1,0 +1,4 @@
+Lovebit is original bitmap lettering created for Aftertone's Cupid Player prototype.
+Copyright 2026 Aftertone contributors. Dedicated to the public domain under CC0 1.0.
+Source: design/android-prototype/build-cupid-font.py
+https://creativecommons.org/publicdomain/zero/1.0/

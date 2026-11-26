@@ -1,0 +1,170 @@
+{
+  "name": "Rosemary Glass — original",
+  "recoveredThroughUtc": "2026-11-19T07:49:33.029Z",
+  "recoveredThroughLocal": "2026-11-19 13:19:33 Asia/Calcutta",
+  "source": "Recorded prototype file edits from this chat",
+  "entryView": "Home / Smoked orchid / Glass orb",
+  "adjustments": [
+    "Self-contained font and shared icon paths",
+    "Separate browser storage key",
+    "Home/Rosemary/Smoked orchid entry view matching the reference"
+  ],
+  "files": {
+    "index.html": {
+      "historicalSha256": "c64826d5f14f9a49c619fe0d3ad13ec78e3e16890d5034cfdce77b9fc0ef0ac9",
+      "sha256": "6e98237cc4b4a391358675d7d85c1c5dfade86f03a46025e2411708b35b49c8b"
+    },
+    "app.mjs": {
+      "historicalSha256": "b9645d3f56cae54afbd202a56453b240e1f22ac93ce66de58002cf2c50c89a27",
+      "sha256": "a38b39471642a9436018ffa081b3299cbaab1f5591582ec98a860481c8abe0cf"
+    },
+    "styles.css": {
+      "historicalSha256": "cd6dbc657ed9d47273820d9a3a23961166210dedccd042595f18790dea502063",
+      "sha256": "7cf04b1808ded8935e92665df4295a82062cff2621f595ff3989ef45958cc8d0"
+    },
+    "rosemary.css": {
+      "historicalSha256": "ae6db1b7eb2e22341a464a25b1fd27efe798b55764a5cca34ee7ed37a8075598",
+      "sha256": "ae6db1b7eb2e22341a464a25b1fd27efe798b55764a5cca34ee7ed37a8075598"
+    },
+    "rosemary-icons.mjs": {
+      "historicalSha256": "fdb7f29f277d984fa22fbcd67e89e22c42b0180ce1fb8763647114dfc411bda6",
+      "sha256": "fdb7f29f277d984fa22fbcd67e89e22c42b0180ce1fb8763647114dfc411bda6"
+    },
+    "model.mjs": {
+      "historicalSha256": "6a02af43992ef54fee2c147002edcd1a2da85cdaeef845f7310ff7588bef101a",
+      "sha256": "6a02af43992ef54fee2c147002edcd1a2da85cdaeef845f7310ff7588bef101a"
+    },
+    "model.test.mjs": {
+      "historicalSha256": "c0b1eee78b252062bd2f3099a8734f9b19a6a130a73dab315b3c8e9732ca1412",
+      "sha256": "c0b1eee78b252062bd2f3099a8734f9b19a6a130a73dab315b3c8e9732ca1412"
+    },
+    "tokens.json": {
+      "historicalSha256": "3f0c15387a233184ca1bfde10818cec8c13c8bc9690a19ce311ac809ac5bc69f",
+      "sha256": "3f0c15387a233184ca1bfde10818cec8c13c8bc9690a19ce311ac809ac5bc69f"
+    },
+    "build-icons.mjs": {
+      "historicalSha256": "0a870d60af6e8cee58c7f3a6d55ef3c8c2214cb7da929710c57baa93c0754722",
+      "sha256": "0a870d60af6e8cee58c7f3a6d55ef3c8c2214cb7da929710c57baa93c0754722"
+    },
+    "assets/dreamscape.png": {
+      "sha256": "9704dcc1b31cda015100466edfa7250b32f314ffb94733ff98e96090f5d1391a"
+    },
+    "assets/eternal.svg": {
+      "sha256": "41729604605d6ea91642e4010d95e46604f4a94f140d9dd8553aacb0d87e8290"
+    },
+    "assets/fonts/manrope.ttf": {
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+    },
+    "assets/README.md": {
+      "sha256": "68882a81593a6f78c0812c111784a07c5457735363ea5ea293ceaae4879ff558"
+    },
+    "assets/violet-hours.svg": {
+      "sha256": "ca1b2f4cb4a8254c4b53fb7cf041f5e77218cce71be926b90eb9355e447922a0"
+    },
+    "HISTORY.md": {
+      "sha256": "84372bd8a67385830e55a1de7db29d8de6089f4b7e14140e4d98032c496eb1b1"
+    },
+    "icons/Album.svg": {
+      "sha256": "52d910cd6abb52fa3255c1d993470b2ad9fecd08c671c75901863686f789fd41"
+    },
+    "icons/ArrowBack.svg": {
+      "sha256": "0a43f651c619e2f94427d88f828ae7a6ea34c73320649d75867725afb71423ed"
+    },
+    "icons/Check.svg": {
+      "sha256": "827f55616dd021cee667e06a30210223e8a72d4e077f8d7a98f8fcc1a5df22eb"
+    },
+    "icons/ChevronDown.svg": {
+      "sha256": "6bb9aa4dfe0ad5ae639496e1cfe7e589616da56c80e154dd1530451647a07244"
+    },
+    "icons/ChevronRight.svg": {
+      "sha256": "20e7919bc438c641ecca50bc68642cc96cf07ae9856b3758edb98548c28d8bb5"
+    },
+    "icons/Close.svg": {
+      "sha256": "4b34c29d7eacde4447f2c1dad89d6d995229a7c63841555dc43d373356a12fb7"
+    },
+    "icons/Download.svg": {
+      "sha256": "fa4d3a851b8e129ef9eabbd24ca3987f30e144f094250d829cad0634c0f42182"
+    },
+    "icons/Equalizer.svg": {
+      "sha256": "242e2eeefa0477fd2334f49f405e97d0063658ed5cd79e8b797f0a4c8bc027e9"
+    },
+    "icons/Headphones.svg": {
+      "sha256": "d2f1c8d004ae93e16f0a69db83e35aeb5e7e91428d89a2d07ce5363e833ba3c6"
+    },
+    "icons/Heart.svg": {
+      "sha256": "c0e052d8fe60da63211ae3a0299d27707031fe957a87595e036d8a5f83d0191a"
+    },
+    "icons/Home.svg": {
+      "sha256": "f7ad35fa8e0130cbeee7d4ab572a6a33cf78a05b7951bca878ef97dcf2f4ddcd"
+    },
+    "icons/Info.svg": {
+      "sha256": "b9de0be59952bb8c947220a2ad8d6370b49eedcd8abe8dfbce79249139344deb"
+    },
+    "icons/Library.svg": {
+      "sha256": "6c324bad98111753a31473864fefc207e9f649559269d46397f74a911e5dee81"
+    },
+    "icons/Lyrics.svg": {
+      "sha256": "bb6205c0d4836f785d4d667843aaae7f0e95f5c5905db539d1b415366f608390"
+    },
+    "icons/More.svg": {
+      "sha256": "98090ba16a4e4f8e5efb563b1d25929e4dd512dc6869477420646b80bf1ed378"
+    },
+    "icons/Next.svg": {
+      "sha256": "ab2b229b855c72b8bcb9c5964dafe6e37e954f11cf04b138d340fe89c7ea6ff6"
+    },
+    "icons/Palette.svg": {
+      "sha256": "1dd8ce834efddf0da9f43b7e9ad0e65eafbae9efee76c0aa87a65fd8f26fc193"
+    },
+    "icons/Pause.svg": {
+      "sha256": "359d13770d88a8bde8c9d88ed64482ca53a9191cf8d81d1db4a37c6aca9ca091"
+    },
+    "icons/Play.svg": {
+      "sha256": "7b95354c11eb98f085ed18d5e8c0e4eeec365c8d4fc7ea7e4ee66fddd0f8444b"
+    },
+    "icons/PlaylistAdd.svg": {
+      "sha256": "8142f0a89159f1e0768907efa4c734073578484d66090a21e61f61693971454e"
+    },
+    "icons/Previous.svg": {
+      "sha256": "9c9de275972a36ab6e95366b6c17a630b202be0e364bfce3d18a7b2d9493fdc7"
+    },
+    "icons/QueueMusic.svg": {
+      "sha256": "b7c2f06fd019209a7dd7b4a41b47d76efe6293759a7e6500489c18bd6ba5aac4"
+    },
+    "icons/Remove.svg": {
+      "sha256": "83ee4e7aaff015752f6407d4b23512b4438d037f271626ae40a8948c6c776076"
+    },
+    "icons/Repeat.svg": {
+      "sha256": "903f5652cba3fbcff5267b131034a76a9565e022b31f92b3d69608e496180243"
+    },
+    "icons/Search.svg": {
+      "sha256": "b91f6104078d64328e6662987b6d5ac1b28c3176a21e07292c74787e9a3e3847"
+    },
+    "icons/Settings.svg": {
+      "sha256": "3356c4c8d05eb406900a5cabba4aee5a53830c070714c712f32da72ba67800f4"
+    },
+    "icons/Shuffle.svg": {
+      "sha256": "3c0c98672f7a5634eb996f239d3ec646b893fd12f6733e8ee2924e43993c5bf4"
+    },
+    "icons/Song.svg": {
+      "sha256": "743e7273a3aca875053e555e7f447eaf39b4317c2ebb4367191fe4b8f1a76aa0"
+    },
+    "icons/Speaker.svg": {
+      "sha256": "25228189a41fd077387e0e8b54b17828a7d3f4104c3f7a63641f03ea8b327435"
+    },
+    "icons/Star.svg": {
+      "sha256": "12236081620e7921c1c929732473bd31939f77b3e7fd0b0b944a1095fa860b9a"
+    },
+    "icons/Timer.svg": {
+      "sha256": "48690a1b564d5edaee22617c07e4f13ef1d8f6be80e0c3117999a9df2a725b1a"
+    },
+    "icons/VolumeDown.svg": {
+      "sha256": "4267a4b2a9b87ccffe895c5dbd5159439960fd17f347c3885bf6ddabfaee7186"
+    },
+    "icons/VolumeOff.svg": {
+      "sha256": "d7c0acc7e9f1d15abe6f9867ee7ce564c0ae1bc6457d832989fccf149c1323a7"
+    },
+    "icons/VolumeUp.svg": {
+      "sha256": "e8e2a8f0225651901259e77092839a1993a47f284a7d9d58f5685729c3e2335d"
+    }
+  }
+}

@@ -396,6 +396,7 @@ fun dynamicSchemes(s: AppSettings, context: android.content.Context): ((Boolean)
 
 /** See [ThemeColors]. [seed] is [seedFor] (animated, in the app); [dynamic] is [dynamicSchemes]. */
 fun themeColors(s: AppSettings, dark: Boolean, seed: Color, dynamic: ((Boolean) -> ColorScheme)?): ThemeColors {
+    if (s.appTemplate != com.prism.music.data.prefs.AppTemplate.ORIGINAL) return templateColors(s, dark)
     val white = s.lightStyle == com.prism.music.data.prefs.LightStyle.WHITE
     val light = SpectrumPresets.light(s.spectrumPreset, s.spectrumStops, s.spectrumBands)
     val minRatio = s.contrast.minRatio
@@ -491,7 +492,9 @@ fun PrismTheme(settings: AppSettings, artworkColor: Color?, content: @Composable
 
     // Shapes (1.7.7) are part of it: a cover shape, the corner slider or the buttons' shape applies at once.
     val ui = remember(settings.corners, settings.shapes, settings.uiDensity, settings.cardSize, settings.titleSize, settings.reduceMotion) { PrismUi.from(settings) }
-    val typography = remember(settings.fontChoice, settings.fontStamp, settings.type) { appTypography(settings) }
+    val typography = remember(settings.appTemplate, settings.fontChoice, settings.fontStamp, settings.type) {
+        if (settings.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID) cupidTypography() else appTypography(settings)
+    }
     // Settings → Appearance → Text → "Lyrics font" (#12): null keeps each lyric style's own face.
     val lyricsFont = remember(settings.lyricsFont, settings.fontStamp) {
         when (settings.lyricsFont) {

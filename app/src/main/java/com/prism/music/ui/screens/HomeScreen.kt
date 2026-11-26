@@ -43,7 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.prism.music.data.prefs.HomeShortcut
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -449,6 +449,7 @@ fun HomeScreen(bottomPadding: androidx.compose.ui.unit.Dp) {
     ) {
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = bottomPadding + 16.dp)) {
             item { HomeTopBar() }
+            if (settings.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID) item("cupid-home") { CupidHomeCard() }
             item(key = "update") { UpdateBanner() }
             item(key = "performance") { PerformanceOffer() }
             item(key = "smartDownloads") { SmartDownloadsOffer() }
@@ -802,6 +803,13 @@ private fun HomeTopRow(greeting: String, today: String, showGreeting: Boolean) {
     val nav = LocalNavigator.current
     val settings = LocalAppSettings.current
     val ui = com.prism.music.ui.theme.LocalUi.current
+    if (settings.appTemplate != com.prism.music.data.prefs.AppTemplate.ORIGINAL) {
+        com.prism.music.ui.components.ScreenHeader(greeting, subtitle = today) {
+            com.prism.music.ui.components.RoundAction(PrismIcons.Settings, tr(R.string.settings)) { nav.go(Routes.SETTINGS) }
+            com.prism.music.ui.components.RoundAction(PrismIcons.Customize, tr(R.string.customize_home_2)) { nav.go(Routes.CATALOGUE) }
+        }
+        return
+    }
     Row(
         Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 14.dp, top = ui.gap(14.dp)),
         verticalAlignment = Alignment.CenterVertically,

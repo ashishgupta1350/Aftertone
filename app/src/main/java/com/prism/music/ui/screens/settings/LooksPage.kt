@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -169,6 +169,7 @@ fun LooksPage(bottomPadding: Dp, find: String? = null, showBack: Boolean = true,
         menu = listOf(PageMenuItem(tr(R.string.tl_reset_everything)) { resetting = true }),
         preview = { strip -> LooksPreview(strip) },
     ) {
+        item("app-templates") { TemplatePicker() }
         if (app.performanceMode) item("performance") { PerformanceNote() }
         item("now") { LookNow(current?.let(c.looks::find), edited, onSave = { saving = true }, onShare = { sharing = it }, onApply = { apply(it) }) }
         seasonLook?.let { look -> item("season") { SeasonCard(look) { apply(look) } } }

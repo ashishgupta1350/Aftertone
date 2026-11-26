@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -169,6 +169,9 @@ internal fun SettingsRootContent(
                 }
             }
             return@SettingsPageScaffold
+        }
+        item("app-template") {
+            LinkRow("App template", value = settings.appTemplate.title, icon = PrismIcons.Palette) { onOpen(SettingsPageId.LOOKS, null) }
         }
         item(accountKey) { account() }
         // Performance mode (1.7.6): one switch for slower phones. Nothing is removed and no choice is changed: the

@@ -59,7 +59,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -349,13 +349,14 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
     // navigation) is a dark one: in light mode a light grey strip sat under the player.
     // Player → Show on the player → "Band behind the navigation buttons" (#250, 1.7.9.1): off, the player shows through.
     val navBand = settings.playerNavBand
-    DisposableEffect(navBand) {
+    val cupidLight = settings.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID && !com.prism.music.ui.theme.LocalIsDark.current
+    DisposableEffect(navBand, cupidLight) {
         val window = (view.context as? Activity)?.window
         val ctl = window?.let { WindowCompat.getInsetsController(it, view) }
         val previous = ctl?.isAppearanceLightStatusBars
         val previousNav = ctl?.isAppearanceLightNavigationBars
-        ctl?.isAppearanceLightStatusBars = false
-        ctl?.isAppearanceLightNavigationBars = false
+        ctl?.isAppearanceLightStatusBars = cupidLight
+        ctl?.isAppearanceLightNavigationBars = cupidLight
         @Suppress("DEPRECATION")
         val previousNavColor = window?.navigationBarColor
         @Suppress("DEPRECATION")
@@ -685,6 +686,37 @@ fun NowPlayingScreen(onCollapse: () -> Unit) {
         if (showPlaylists) com.prism.music.ui.components.PlaylistPicker(song) { showPlaylists = false }
         if (showShare) com.prism.music.ui.components.ShareSheet(song.shareTarget()) { showShare = false }
         if (showSpeed) SpeedPitchSheet(song) { showSpeed = false }
+    }
+
+    if (settings.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID && !videoMode && !settings.immersivePlayer) {
+        val panel: (@Composable () -> Unit)? = when {
+            queueOpen -> { { InlineQueue({}, {}, Modifier.fillMaxSize(), onClose = { queueOpen = false }) } }
+            lyricsOpen -> { { LyricsPanel(lyricsState, isPlaying, true, {}, {}, Modifier.fillMaxSize(), lyricsGround = false, onChangeSource = { showProviders = true }) } }
+            statsOpen -> { { NerdStatsPanel(Modifier.fillMaxSize()) } }
+            else -> null
+        }
+        CupidPlayer(
+            onCollapse = onCollapse,
+            onOptions = { showActions = true },
+            onLyrics = { if (lyricsOpen) closeLyrics() else openLyrics() },
+            onQueue = { toggleQueue() },
+            onOutput = { showOutputs = true },
+            onSettings = { onCollapse(); nav.go(Routes.SETTINGS) },
+            panelTitle = when { queueOpen -> tr(R.string.queue); lyricsOpen -> tr(R.string.lyrics); statsOpen -> "Audio details"; else -> null },
+            onClosePanel = { queueOpen = false; closeLyrics(); statsOpen = false },
+            panel = panel?.let { inner -> {
+                // The full lyrics/queue views use white performance ink; keep a matching plum paper panel in either mode.
+                val colors = com.prism.music.ui.theme.templateColors(settings, dark = true)
+                MaterialTheme(colorScheme = colors.scheme) {
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        com.prism.music.ui.theme.LocalIsDark provides true,
+                        androidx.compose.material3.LocalContentColor provides colors.scheme.onSurface,
+                    ) { Box(Modifier.fillMaxSize().background(colors.scheme.surface)) { inner() } }
+                }
+            } },
+        )
+        playerSheets()
+        return
     }
 
     // ------------------------------------------------ Immersive mode (⋯ menu): the cover fills the screen, lyrics over it

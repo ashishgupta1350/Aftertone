@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15101d">
+  <title>Aftertone — Rosemary versions</title>
+  <style>
+    @font-face { font-family: Manrope; src: url('./rosemary-original/assets/fonts/manrope.ttf') format('truetype'); font-display: swap; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(ellipse at 70% 0, #49324e70, transparent 65%), #15101d; color: #f3e9fa; font: 16px/1.6 Manrope, system-ui, sans-serif; }
+    main { max-width: 1040px; margin: auto; padding: 64px 28px; }
+    .brand { color: #e2bbf0; font-size: 20px; font-weight: 750; text-decoration: none; }
+    .eyebrow { margin: 52px 0 12px; color: #c8a6d7; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+    h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.15; letter-spacing: -2px; margin: 0 0 18px; }
+    .intro { margin: 0; max-width: 640px; color: #c8b8d3; }
+    .versions { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
+    article { border: 1px solid #c3a2d330; border-radius: 24px; padding: 28px; background: linear-gradient(145deg, #b78acf10, #ffffff03); display: flex; flex-direction: column; }
+    .number { color: #bca0c9; font-size: 12px; letter-spacing: 1px; }
+    h2 { font-size: 25px; line-height: 1.3; letter-spacing: -.7px; margin: 14px 0; }
+    article p { color: #c8b8d3; margin: 0 0 24px; }
+    ul { margin: 0 0 28px; padding-left: 20px; color: #dbcbe4; font-size: 14px; }
+    li { margin: 6px 0; }
+    .open { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 52px; margin-top: auto; padding: 12px 18px; border: 1px solid #d8b7e866; border-radius: 12px; color: #f5e9ff; background: #dab3f01a; text-decoration: none; font-weight: 650; }
+    .open:hover { background: #dab3f02f; }
+    a:focus-visible { outline: 2px solid #f1c6ff; outline-offset: 5px; }
+    footer { margin-top: 32px; color: #a994b7; font-size: 13px; }
+    @media(max-width: 650px) { main { padding: 32px 20px; } .versions { grid-template-columns: 1fr; gap: 18px; } .eyebrow { margin-top: 32px; } article { padding: 24px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="brand" href="../?template=rosemary">aftertone.</a>
+    <p class="eyebrow">Rosemary Glass · version history</p>
+    <h1>One original.<br>Room to explore.</h1>
+    <p class="intro">Two independent versions of the Rosemary prototype. Keep the original reference intact and continue exploring the updated design.</p>
+    <section class="versions" aria-label="Choose a prototype version">
+      <article>
+        <span class="number">01 / RESTORED ORIGINAL</span>
+        <h2>The original reference</h2>
+        <p>Recovered from the design history to match the version in your screenshot.</p>
+        <ul>
+          <li>Original header, spacing and icon sizes</li>
+          <li>Smoked orchid palette and glass-orb icons</li>
+          <li>Independent files, artwork and preferences</li>
+        </ul>
+        <a class="open" href="./rosemary-original/">Open original <span aria-hidden="true">↗</span></a>
+      </article>
+      <article>
+        <span class="number">02 / PROMPTED UPDATE</span>
+        <h2>The updated prototype</h2>
+        <p>The later version created through your follow-up prompts remains available.</p>
+        <ul>
+          <li>Larger icons and more readable labels</li>
+          <li>Separate Search and Your Library screens</li>
+          <li>Current theme options and component kit</li>
+        </ul>
+        <a class="open" href="../?template=rosemary">Open updated <span aria-hidden="true">↗</span></a>
+      </article>
+    </section>
+    <footer>Original recovered through 19 November 2026, 13:19 IST. The updated prototype and Android app are preserved.</footer>
+  </main>
+</body>
+</html>

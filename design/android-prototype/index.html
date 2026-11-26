@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#171322" />
+    <title>Aftertone — Android prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./rosemary.css" />
+    <link rel="stylesheet" href="./readability.css" />
+    <link rel="stylesheet" href="./cupid.css" />
+  </head>
+  <body>
+    <header class="studio-header">
+      <a class="wordmark" href="#" aria-label="Aftertone prototype home"
+        ><span class="brand-mark" aria-hidden="true"
+          ><i></i><i></i><i></i><i></i><i></i></span
+        >aftertone<span class="brand-period">.</span></a
+      >
+      <span class="studio-label" id="studio-template-label"
+        >ANDROID PROTOTYPE <span class="version">01</span></span
+      >
+      <div class="studio-actions">
+        <button
+          class="studio-button theme-launcher"
+          data-action="themes"
+          aria-label="Choose a template"
+        >
+          Themes <span aria-hidden="true">◇</span>
+        </button>
+        <button class="studio-button" data-action="components">
+          <span class="full-button-label">Components</span
+          ><span class="short-button-label">Kit</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </header>
+    <main class="workspace">
+      <aside class="design-note">
+        <p class="eyebrow">A NEW LISTENING EXPERIENCE</p>
+        <h1>A little closer<br />to the music.</h1>
+        <p class="design-description">
+          Soft light. A little glass.<br />And room for the song to breathe.
+        </p>
+        <div class="palette-section">
+          <p class="eyebrow">CHOOSE YOUR TEMPLATE</p>
+          <div id="desktop-templates" class="desktop-templates"></div>
+          <p class="eyebrow">FIND YOUR SHADE</p>
+          <div id="desktop-palettes" class="palette-options"></div>
+        </div>
+        <div class="reference-note">
+          <span class="note-line"></span>
+          <p>
+            Atmosphere from reference 01.<br />Player composition from reference
+            03.<br />A compact player inspired by 02.
+          </p>
+        </div>
+      </aside>
+      <section
+        class="preview-area"
+        aria-label="Interactive Android mobile preview"
+      >
+        <nav class="preview-nav" aria-label="Preview screens">
+          <button data-screen="player" aria-pressed="true">Now playing</button>
+          <button data-screen="home" aria-pressed="false">Home</button>
+          <button data-screen="search" aria-pressed="false">Search</button>
+          <button data-screen="library" aria-pressed="false">Library</button>
+        </nav>
+        <div class="phone" id="phone" data-palette="dusk">
+          <div class="ambient-backdrop" aria-hidden="true"></div>
+          <div class="phone-grain" aria-hidden="true"></div>
+          <div class="status-bar">
+            <span>9:41</span><span class="camera" aria-hidden="true"></span
+            ><span
+              class="system-icons"
+              aria-label="Full signal, Wi-Fi, 87 percent battery"
+              ><svg viewBox="0 0 18 14" aria-hidden="true">
+                <path
+                  d="M1 13V10h2v3zm4 0V7h2v6zm4 0V4h2v9zm4 0V1h2v12z"
+                  fill="currentColor"
+                /></svg
+              ><svg viewBox="0 0 18 14" aria-hidden="true">
+                <path
+                  d="M2 4a11 11 0 0 1 14 0M5 7a6 6 0 0 1 8 0M8 10a2 2 0 0 1 2 0"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                /></svg
+              ><span class="battery"><i></i></span
+            ></span>
+          </div>
+          <div id="screen" class="screen"></div>
+          <div id="sheet-layer"></div>
+          <div id="toast" class="toast" role="status" aria-live="polite"></div>
+          <div class="gesture-bar" aria-hidden="true"></div>
+        </div>
+        <div class="preview-caption">
+          <span class="live-dot"></span
+          ><button
+            id="active-template-label"
+            data-action="themes"
+            aria-label="Choose a template"
+          >
+            Aurora</button
+          ><span class="caption-divider">/</span><span>Demo playback</span>
+          <div id="compact-palettes" class="compact-palettes"></div>
+        </div>
+      </section>
+      <aside class="component-index">
+        <p class="eyebrow">BUILT ONE PIECE AT A TIME</p>
+        <h2>Small details.<br />One feeling.</h2>
+        <div class="component-links">
+          <button data-highlight="artwork">
+            <span>01</span>
+            <div>
+              Artwork surface<small>Rounded glass, soft elevation</small>
+            </div>
+            <span>↗</span>
+          </button>
+          <button data-highlight="track-info">
+            <span>02</span>
+            <div>Track identity<small>Quiet, centered typography</small></div>
+            <span>↗</span>
+          </button>
+          <button data-highlight="transport">
+            <span>03</span>
+            <div>
+              Playback controls<small>Tactile, luminous, familiar</small>
+            </div>
+            <span>↗</span>
+          </button>
+          <button data-highlight="utility-dock">
+            <span>04</span>
+            <div>Utility dock<small>Four tools, one glass surface</small></div>
+            <span>↗</span>
+          </button>
+          <button data-highlight="volume">
+            <span>05</span>
+            <div>
+              Listening controls<small>Simple, precise, within reach</small>
+            </div>
+            <span>↗</span>
+          </button>
+        </div>
+        <button class="all-components" data-action="components">
+          Explore the component kit <span>→</span>
+        </button>
+        <p class="stage-note">
+          DESIGN FIRST, THEN CONNECT<br /><span
+            >Try the flow. Find the feeling.</span
+          >
+        </p>
+      </aside>
+    </main>
+    <footer class="studio-footer">
+      <span>AFTERTONE DESIGN LAB</span
+      ><span>Crafted for Android. Tuned to you.</span
+      ><span>PLAYER STUDY — 001</span>
+    </footer>
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>
