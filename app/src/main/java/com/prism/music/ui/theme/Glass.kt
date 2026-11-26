@@ -175,6 +175,13 @@ fun GlassSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val settings = LocalAppSettings.current
+    if (settings.appTemplate == com.prism.music.data.prefs.AppTemplate.CUPID) {
+        val paper = RoundedCornerShape(6.dp)
+        Box(modifier.shadow(3.dp, paper).clip(paper)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, paper), content = content)
+        return
+    }
     val haze = LocalHazeState.current.takeUnless { inPage }
     val dark = LocalIsDark.current
     if (inPage && com.prism.music.ui.components.LocalFrosted.current) {

@@ -173,6 +173,9 @@ object BuiltInLooks {
 
     val all: List<Look> = listOf(
         Look("prism", tr(R.string.app_name), builtIn = true, note = tr(R.string.how_prism_comes_outfit_the_split)),
+        Look("aurora-glass", "Aurora Glass", builtIn = true, note = "The lavender glass Android prototype", values = mapOf("app_template" to "s:AURORA")),
+        Look("rosemary-glass", "Rosemary Glass", builtIn = true, note = "Glossy violet icons and floating panels", values = mapOf("app_template" to "s:ROSEMARY")),
+        Look("cupid-player", "Cupid Player", builtIn = true, note = "Rose paper and a moonlit turntable", values = mapOf("app_template" to "s:CUPID", "theme_mode" to "s:LIGHT")),
         Look(
             "paper", tr(R.string.paper), builtIn = true, note = tr(R.string.light_serif_type_ink_instead_of),
             values = mapOf(
@@ -260,6 +263,7 @@ object BuiltInLooks {
 /** How a look setting and its value read in the undo bar and History ("Corners → Sharp"). */
 object LookLabels {
     private val titles = mapOf(
+        "app_template" to "App template",
         "glass_blur" to tr(R.string.glass_blur), "glass_frost" to tr(R.string.glass_frost), "glass_more" to tr(R.string.glass_on_more_of_the_screen), "player_gradient_depth" to tr(R.string.gradient_depth),
         "theme_mode" to tr(R.string.theme), "pure_black" to tr(R.string.pure_black), "color_source" to tr(R.string.accent_from), "accent" to tr(R.string.accent_color),
         "light_style" to tr(R.string.light), "accent_exact" to tr(R.string.exactly_as_picked), "accent_light" to tr(R.string.light_mode_accent), "spectrum_preset" to tr(R.string.spectrum),
@@ -335,6 +339,7 @@ object LookLabels {
         fun <E : Enum<E>> e(entries: List<E>, label: (E) -> String) = entries.associate { it.name to label(it) }
         val p = com.prism.music.data.prefs.ThemeMode.entries
         mapOf(
+            "app_template" to e(com.prism.music.data.prefs.AppTemplate.entries) { it.title },
             "theme_mode" to e(p) { it.label },
             "color_source" to e(com.prism.music.data.prefs.ColorSource.entries) { it.label },
             "light_style" to e(com.prism.music.data.prefs.LightStyle.entries) { it.label },
@@ -449,7 +454,7 @@ object LookLabels {
 
     /** The parts of Prism's look, in the order they're named, and the settings each is made of. */
     private val areaOf: List<Pair<String, Set<String>>> = listOf(
-        "theme" to setOf("theme_mode", "pure_black"),
+        "theme" to setOf("app_template", "theme_mode", "pure_black"),
         "colors" to setOf(
             "color_source", "accent", "light_style", "accent_exact", "accent_light", "spectrum_preset", "spectrum_stops", "spectrum_bands",
             "surface_tint", "surface_tint_strength", "surface_color", "contrast_level", "artwork_swatch", "artwork_vivid", "artwork_change", "page_picture_accent", "playing_page_color",

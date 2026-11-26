@@ -1326,6 +1326,7 @@ data class AppSettings(
     val accountEmail: String = "",
     val accountAvatar: String = "",
     // Appearance
+    val appTemplate: AppTemplate = AppTemplate.ORIGINAL,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val pureBlack: Boolean = false,
     val colorSource: ColorSource = ColorSource.CUSTOM,
@@ -1833,6 +1834,7 @@ class SettingsRepository(
         val accountName = stringPreferencesKey("account_name")
         val accountEmail = stringPreferencesKey("account_email")
         val accountAvatar = stringPreferencesKey("account_avatar")
+        val appTemplate = stringPreferencesKey("app_template")
         val themeMode = stringPreferencesKey("theme_mode")
         val pureBlack = booleanPreferencesKey("pure_black")
         val colorSource = stringPreferencesKey("color_source")
@@ -2238,7 +2240,7 @@ class SettingsRepository(
         /** Everything the "Reset look" button puts back. */
         val look: List<Preferences.Key<*>> by lazy {
             listOf(
-                fontChoice, textScale, corners, uiDensity, titleSize, cardSize, reduceMotion, navStyle, navLabels, navHideOnScroll,
+                appTemplate, fontChoice, textScale, corners, uiDensity, titleSize, cardSize, reduceMotion, navStyle, navLabels, navHideOnScroll,
                 navTabs, startTab, miniPlayerStyle, miniSkipButtons, miniPrevButton, miniPlayButton, miniProgress, miniProgressColor, miniFillStrength, playRing, playingInPageColor, playerBackground, playerBackdropShow, playerArtCorners, transportStyle,
                 coverSize, scrubberStyle, artShrinkOnPause, showOutputDevice, lyricsAlign, libraryView, playlistHeroCover, frostedPages, replayThemeColors,
                 immersiveArt, immersiveLyrics, immersiveControls, playerShuffleRepeat, lightStyle,
@@ -2267,7 +2269,7 @@ class SettingsRepository(
          */
         val lookSpec: List<Pair<Preferences.Key<*>, Char>> by lazy {
             listOf(
-                themeMode to 's', pureBlack to 'b',
+                appTemplate to 's', themeMode to 's', pureBlack to 'b',
                 colorSource to 's', accent to 'i', lightStyle to 's', accentExact to 'b', accentLight to 'i', spectrumPreset to 's',
                 spectrumStops to 's', spectrumBands to 'b', surfaceTint to 's', surfaceTintStrength to 'f', surfaceColor to 'i', contrast to 's',
                 artworkSwatch to 's', artworkVivid to 'b', artworkChange to 's', pageColors to 'b',
@@ -2412,6 +2414,7 @@ class SettingsRepository(
             accountName = p[K.accountName] ?: "",
             accountEmail = p[K.accountEmail] ?: "",
             accountAvatar = p[K.accountAvatar] ?: "",
+            appTemplate = p.enum(K.appTemplate, d.appTemplate),
             themeMode = p.enum(K.themeMode, d.themeMode),
             pureBlack = p[K.pureBlack] ?: d.pureBlack,
             colorSource = p.enum(K.colorSource, d.colorSource),
@@ -2826,8 +2829,8 @@ class SettingsRepository(
      * The settings as Prism uses them: with Performance mode on, its lighter look in place of the listener's heavier
      * choices ([AppSettings.effective]). The choices themselves are [stored], unchanged.
      */
-    val flow: StateFlow<AppSettings> = context.dataStore.data.map { raw = it; read(it).effective() }.stateIn(
-        scope, SharingStarted.Eagerly, read(raw).effective()
+    val flow: StateFlow<AppSettings> = context.dataStore.data.map { raw = it; read(it).withTemplate().effective() }.stateIn(
+        scope, SharingStarted.Eagerly, read(raw).withTemplate().effective()
     )
 
     val current: AppSettings get() = flow.value
@@ -3079,6 +3082,8 @@ class SettingsRepository(
         it.remove(K.cookie); it.remove(K.dataSyncId); it.remove(K.authUser)
         it.remove(K.accountName); it.remove(K.accountEmail); it.remove(K.accountAvatar)
     }
+
+    fun setAppTemplate(v: AppTemplate) = edit { it[K.appTemplate] = v.name }
 
     fun setThemeMode(v: ThemeMode) = edit { it[K.themeMode] = v.name }
     fun setPureBlack(v: Boolean) = edit { it[K.pureBlack] = v }

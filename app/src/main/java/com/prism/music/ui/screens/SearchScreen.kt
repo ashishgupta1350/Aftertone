@@ -42,7 +42,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -115,11 +115,13 @@ fun SearchScreen(bottomPadding: Dp) {
     // What the results are for: follows the typing, a moment after it pauses.
     var live by rememberSaveable { mutableStateOf("") }
     val settings = LocalAppSettings.current
+    val templateSearch = settings.appTemplate != com.prism.music.data.prefs.AppTemplate.ORIGINAL
     // Search opens on the listener's first chip (#224).
     val firstChip = remember { chipOrder(settings.searchChips).first() }
     var filter by rememberSaveable { mutableStateOf(firstChip ?: SearchFilter.TOP) }
     // Where to look (#46): YouTube Music, or the music on this phone (your files and downloads). Offline, the phone.
     var onPhone by rememberSaveable { mutableStateOf(firstChip == null || !c.network.isOnline()) }
+    LaunchedEffect(templateSearch) { if (templateSearch) filter = SearchFilter.SONGS }
     var focused by remember { mutableStateOf(false) }
     val suggestions = remember { mutableStateListOf<String>() }
     // Beside the completions while typing (1.7.6): the artists, songs and albums YouTube Music offers, with pictures.
@@ -280,7 +282,7 @@ fun SearchScreen(bottomPadding: Dp) {
                 Icon(PrismIcons.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f)) {
-                    if (query.isEmpty()) Text(tr(R.string.songs_albums_artists_lyrics), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (query.isEmpty()) Text(if (templateSearch) "Search songs or artists" else tr(R.string.songs_albums_artists_lyrics), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     BasicTextField(
                         value = query,
                         onValueChange = { query = it },
@@ -309,12 +311,12 @@ fun SearchScreen(bottomPadding: Dp) {
         }
 
         if (query.isBlank()) {
-            Row(Modifier.padding(start = 16.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!templateSearch) Row(Modifier.padding(start = 16.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 com.prism.music.ui.components.PrismChip(false, { focus.clearFocus(); nav.go(com.prism.music.ui.Routes.discovery()) }, tr(R.string.discovery_fresh))
                 com.prism.music.ui.components.PrismChip(false, { focus.clearFocus(); nav.go(com.prism.music.ui.Routes.discovery("playlists")) }, tr(R.string.discovery_find_playlists))
             }
             SearchLanding(
-                recents, moods, bottomPadding, opened,
+                recents, moods, bottomPadding, if (templateSearch) opened.filter { it.item() is SongItem } else opened,
                 onPick = { submit(it) },
                 onRemove = { r -> recents.remove(r); history(context).edit().putString("q", recents.joinToString("\n")).apply() },
                 onForget = { o -> SearchMemory.forget(context, o); opened = SearchMemory.opened(context) },
@@ -333,14 +335,14 @@ fun SearchScreen(bottomPadding: Dp) {
                 // Each once (#330/#346: a row repeated crashed the list with "Key was already used").
                 items(suggestions.filterNot { it.equals(query.trim(), true) }.distinct(), key = { "s:$it" }) { s -> SuggestionRow(PrismIcons.Search, s, onFill = { query = it }) { submit(s) } }
                 // A tap opens or plays one straight away.
-                items(suggestedItems.distinctBy { it.id }, key = { "i:" + it.id }) { item -> ResultRow(item) { saveQuery(query); open(item) } }
+                items(suggestedItems.filter { !templateSearch || it is SongItem }.distinctBy { it.id }, key = { "i:" + it.id }) { item -> ResultRow(item) { saveQuery(query); open(item) } }
             }
             return@Column
         }
 
         // One row of chips: YouTube Music's kinds, and the music on this phone last (it was a row of its own).
         com.prism.music.ui.components.ChipRow(
-            chipOrder(settings.searchChips), { if (it == null) onPhone else !onPhone && it == filter }, { it?.label ?: tr(R.string.on_this_phone) },
+            chipOrder(settings.searchChips).filter { !templateSearch || it == SearchFilter.SONGS || it == null }, { if (it == null) onPhone else !onPhone && it == filter }, { it?.label ?: tr(R.string.on_this_phone) },
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 4.dp),
         ) { if (it == null) onPhone = true else { onPhone = false; filter = it } }
         Box(Modifier.fillMaxWidth().height(3.dp).padding(horizontal = 16.dp)) {

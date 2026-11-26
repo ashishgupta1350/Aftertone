@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="icon rosemary-icon" data-icon="Headphones" data-icon-shape="squircle" viewBox="0 0 64 64" width="64" height="64" fill="none" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="rosemary-squircle-Headphones-face" x1="8" y1="4" x2="52" y2="62" gradientUnits="userSpaceOnUse"><stop stop-color="#61515b"/><stop offset=".32" stop-color="#21101d"/><stop offset=".68" stop-color="#0e0911"/><stop offset="1" stop-color="#34444b"/></linearGradient>
+    <linearGradient id="rosemary-squircle-Headphones-rim" x1="13" y1="4" x2="50" y2="61" gradientUnits="userSpaceOnUse"><stop stop-color="#fff8fd"/><stop offset=".16" stop-color="#c1b9c3"/><stop offset=".38" stop-color="#433640"/><stop offset=".58" stop-color="#0b080e"/><stop offset=".8" stop-color="#a5c7cd"/><stop offset="1" stop-color="#ff7cb4"/></linearGradient>
+    <linearGradient id="rosemary-squircle-Headphones-glyph" x1="7" y1="3" x2="17" y2="22" gradientUnits="userSpaceOnUse"><stop stop-color="var(--icon-light,#ff9bc9)"/><stop offset=".45" stop-color="var(--icon-color,#ff4d9d)"/><stop offset="1" stop-color="var(--icon-deep,#ed0077)"/></linearGradient>
+    <linearGradient id="rosemary-squircle-Headphones-sheen" x1="6" y1="7" x2="54" y2="57" gradientUnits="userSpaceOnUse"><stop stop-color="#fff3fc" stop-opacity=".16"/><stop offset=".47" stop-color="#fff3fc" stop-opacity="0"/><stop offset=".77" stop-color="#c9faff" stop-opacity=".03"/><stop offset="1" stop-color="#c9faff" stop-opacity=".12"/></linearGradient>
+  </defs>
+  <g class="icon-shell">
+    <rect x="4" y="4" width="56" height="56" rx="18" fill="#08060b" stroke="#040305" stroke-width="4"/>
+    <path d="M5 44v1a16 16 0 0 0 16 16h10" stroke="var(--icon-edge,#91f5ff)" stroke-width="2.3" stroke-linecap="round" opacity=".85"/>
+    <path d="M33 61h10a18 18 0 0 0 18-18" stroke="var(--icon-color,#ff4d9d)" stroke-width="2.3" stroke-linecap="round"/>
+    <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#rosemary-squircle-Headphones-face)" stroke="url(#rosemary-squircle-Headphones-rim)" stroke-width="1.5"/>
+    <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#rosemary-squircle-Headphones-sheen)" stroke="#d8b8cc" stroke-opacity=".17" stroke-width=".7" transform="translate(2.2 2.2) scale(.93125)"/>
+    <path d="M7 24v-3A14 14 0 0 1 21 7h23a14 14 0 0 1 10 4" stroke="#fff3fc" stroke-width="1.1" stroke-linecap="round" opacity=".65"/>
+  </g>
+  <g class="glass-glyph" transform="translate(14 14) scale(1.5)" stroke="url(#rosemary-squircle-Headphones-glyph)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <style>.rosemary-icon .solid{fill:var(--glass-glyph-fill);stroke:none}.rosemary-icon .heart-face{fill:var(--glass-heart-fill,none)}</style>
+    <g style="--glass-glyph-fill:url(#rosemary-squircle-Headphones-glyph)"><path d="M4 14v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="12" width="4.5" height="8" rx="2"/><rect x="16.5" y="12" width="4.5" height="8" rx="2"/></g>
+  </g>
+</svg>

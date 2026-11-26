@@ -38,7 +38,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import com.prism.music.ui.theme.TemplateIcon as Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -85,6 +85,10 @@ fun ScreenHeader(
     subtitle: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    if (com.prism.music.ui.theme.LocalAppSettings.current.appTemplate != com.prism.music.data.prefs.AppTemplate.ORIGINAL) {
+        com.prism.music.ui.theme.TemplateHeader(title, modifier, subtitle, actions)
+        return
+    }
     val ui = LocalUi.current
     Row(
         modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 14.dp, top = ui.gap(14.dp), bottom = ui.gap(6.dp)),
@@ -132,7 +136,7 @@ fun RoundAction(icon: ImageVector, description: String, modifier: Modifier = Mod
         }
     } else {
         Box(
-            modifier.size(42.dp).clip(CircleShape).background(glassFill(1.4f)).border(1.dp, glassEdge(), CircleShape)
+            modifier.size(48.dp).clip(CircleShape).background(glassFill(1.4f)).border(1.dp, glassEdge(), CircleShape)
                 .clickable(enabled = enabled, onClickLabel = description, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) { Icon(icon, description, Modifier.size(22.dp), tint = tint) }

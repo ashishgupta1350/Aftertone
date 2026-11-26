@@ -6,6 +6,10 @@ Build with JDK 17 or later and Android SDK 37 using `./gradlew :app:assembleDebu
 
 To host the web player and connect the Android app to the same accounts and libraries, follow the [Aftertone Web setup](web/README.md).
 
+To try the interactive Android redesign studies, see the [Android prototype](design/android-prototype/README.md). Choose Aurora, Rosemary Glass, or the pixel-paper Cupid Player with light and dark modes. All share playback, separate Search and Library screens, and reusable component previews.
+
+The native Android app now includes those templates under **Settings → App template**, with System/Light/Dark modes and the original appearance available. See the [native integration notes](design/android-prototype/NATIVE.md).
+
 Optional cloud backup uses `aftertone.cloud.apiKey` and `aftertone.cloud.databaseUrl` from your local `local.properties`. The example rules in [cloud](cloud/) require your Firebase account UID to replace `REPLACE_WITH_OWNER_UID` before deployment.
 
 ## Upstream Prism project
