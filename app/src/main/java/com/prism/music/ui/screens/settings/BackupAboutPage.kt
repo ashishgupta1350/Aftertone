@@ -35,7 +35,7 @@ import com.prism.music.tr
 import com.prism.music.ui.LocalNavigator
 import com.prism.music.ui.Routes
 import com.prism.music.ui.screens.LicensesPage
-import com.prism.music.ui.screens.SOURCE_URL
+import com.prism.music.data.UpdateChecker
 import com.prism.music.ui.screens.SettingEntry
 import com.prism.music.ui.screens.SettingNeeds
 import com.prism.music.ui.screens.SettingsSection
@@ -116,9 +116,9 @@ internal sealed interface UpdateCheck {
 internal fun updateCheckValue(check: UpdateCheck?, offered: String?): String = when (check) {
     UpdateCheck.Asking -> tr(R.string.asking_github)
     UpdateCheck.Current -> tr(R.string.you_re_up_to_date)
-    is UpdateCheck.Newer -> tr(R.string.prism_is_out_tap_below_to, check.version)
+    is UpdateCheck.Newer -> tr(R.string.aftertone_update_ready, check.version)
     UpdateCheck.Unreachable -> tr(R.string.couldn_t_reach_github_try_again)
-    null -> if (offered != null) tr(R.string.prism_is_available, offered) else tr(R.string.prism, BuildConfig.VERSION_NAME)
+    null -> if (offered != null) tr(R.string.aftertone_update_available, offered) else tr(R.string.aftertone_installed_version, BuildConfig.VERSION_NAME)
 }
 
 /**
@@ -173,7 +173,7 @@ internal fun BackupAboutContent(
         group(tr(R.string.about_updates)) {
             LinkRow(
                 tr(R.string.check_for_updates), value = updateCheckValue(check, offered?.version),
-                info = tr(R.string.prism_also_checks_on_its_own), enabled = check != UpdateCheck.Asking, action = true,
+                enabled = check != UpdateCheck.Asking, action = true,
             ) {
                 scope.launch {
                     check = UpdateCheck.Asking
@@ -195,7 +195,7 @@ internal fun BackupAboutContent(
         // "Your data stays here" was a row that did nothing: its words are the group's ⓘ (§2.7).
         group(tr(R.string.about_3), info = tr(R.string.about_data_info)) {
             // The installed version is the Updates row's value line (and the root's); this one is where Prism comes from.
-            LinkRow(tr(R.string.source_code), value = tr(R.string.open_on_github), external = true) { runCatching { uri.openUri(SOURCE_URL) } }
+            LinkRow(tr(R.string.source_code), value = tr(R.string.open_on_github), external = true) { runCatching { uri.openUri("https://github.com/${UpdateChecker.REPO}") } }
             LinkRow(tr(R.string.take_the_tour), info = tr(R.string.a_minute_s_walk_through_prism)) { c.tourRequests.tryEmit(Unit) }
             LinkRow(tr(R.string.open_source_licenses), value = tr(R.string.gpl_3_0_or_later)) { nav.go(Routes.settings(SettingsSection.LICENSES.key)) }
             // Debug builds only, so it's left out of Settings search (named title: SettingsIndexTest skips it).
@@ -245,7 +245,7 @@ fun LicensesScreen(bottomPadding: Dp, showBack: Boolean = true, onSearch: (() ->
 }
 
 /** The root's line for Backup & about: Prism's version, and what the page holds, in one short line. */
-fun backupAboutValue(s: AppSettings, dark: Boolean): String = tr(R.string.root_backup_short, com.prism.music.BuildConfig.VERSION_NAME)
+fun backupAboutValue(s: AppSettings, dark: Boolean): String = tr(R.string.aftertone_backup_summary, com.prism.music.BuildConfig.VERSION_NAME)
 
 /** The look settings "Reset this page" puts back: none (the page's own reset turns the diagnostics log off again). */
 val backupAboutLookKeys: List<String> = emptyList()

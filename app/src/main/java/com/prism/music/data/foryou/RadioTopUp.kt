@@ -1,5 +1,7 @@
 package com.prism.music.data.foryou
 
+import com.prism.music.data.imports.ImportKeys
+import com.prism.music.data.innertube.MusicVideoMatch
 import com.prism.music.data.model.Song
 
 /**
@@ -18,6 +20,16 @@ object RadioTopUp {
     const val ENOUGH = 8
     /** How many more answers it may ask YouTube for in one top-up. */
     const val MAX_ASKS = 4
+
+    /** Audio uploads, videos and other takes of the seed do not belong immediately after it. */
+    internal fun repeatsSeed(seed: Song, candidate: Song): Boolean {
+        if (seed.id == candidate.id) return true
+        val title = ImportKeys.core(seed.title.substringBefore('|').substringBefore(" // "))
+        val other = ImportKeys.core(candidate.title.substringBefore('|').substringBefore(" // "))
+        return (title.isNotEmpty() && title == other) ||
+            (candidate.isVideo && MusicVideoMatch.sameTitle(seed, candidate)) ||
+            (seed.isVideo && MusicVideoMatch.sameTitle(candidate, seed))
+    }
 
     /** One answer of a radio. */
     class Page(val songs: List<Song>, val continuation: String?)

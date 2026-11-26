@@ -32,10 +32,8 @@ import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/** A newer Prism on GitHub: its version and where to get it (the APK itself when the release has one). */
-data class AppUpdate(val version: String, val url: String) {
-    val isApk: Boolean get() = url.endsWith(".apk", ignoreCase = true)
-}
+/** A stable Aftertone release and its APK. */
+data class AppUpdate(val version: String, val url: String)
 
 /** Where updating Prism from inside the app has got to. */
 sealed interface UpdateProgress {
@@ -47,25 +45,11 @@ sealed interface UpdateProgress {
     /** Prism needs "Install unknown apps" switched on first. */
     data object NeedsPermission : UpdateProgress
     data class Failed(val message: String) : UpdateProgress
-    /**
-     * The new Prism is signed with a different key (the move off the debug key), so Android won't
-     * install it over this one. The listener backs up, keeps [apk], uninstalls and installs it fresh.
-     */
-    data class NewSignature(val version: String, val apk: File) : UpdateProgress
 }
 
-private class SignatureChanged : Exception()
-
-/**
- * Asks GitHub for Prism's latest release now and then (at most every six hours, or right away from
- * Settings → About), and can update
- * Prism in place: the APK is downloaded inside the app and passed to Android's installer, which
- * asks the listener to confirm (Android never lets an app install silently the first time). Only
- * the public release info and file are fetched; nothing about the listener is sent. Pre-releases
- * are never offered, and Android itself refuses an APK that isn't signed like the installed Prism.
- */
+/** Checks the public Aftertone releases and hands verified updates to Android’s installer. */
 class UpdateChecker(private val context: Context, private val http: OkHttpClient, private val scope: CoroutineScope) {
-    private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("aftertone_updates", Context.MODE_PRIVATE)
     private val _available = MutableStateFlow(saved())
     /** The update to offer, or null when Prism is current (or this version was dismissed). */
     val available: StateFlow<AppUpdate?> = _available
@@ -73,7 +57,7 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     val progress: StateFlow<UpdateProgress> = _progress
     @Volatile private var checking = false
     private var job: Job? = null
-    private val dir get() = File(context.cacheDir, "updates")
+    private val dir get() = File(context.cacheDir, "aftertone-updates")
 
     init {
         // A finished update leaves its APK behind; it's no use once that version is running.
@@ -83,7 +67,7 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     private fun saved(): AppUpdate? {
         val v = prefs.getString("latest_version", null) ?: return null
         val url = prefs.getString("latest_url", null) ?: return null
-        return AppUpdate(v, url).takeIf { isNewer(v, BuildConfig.VERSION_NAME) && v != prefs.getString("dismissed", null) }
+        return releaseUpdate("v$v", url)?.takeIf { isNewer(v, BuildConfig.VERSION_NAME) && v != prefs.getString("dismissed", null) }
     }
 
     /**
@@ -111,43 +95,44 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
 
     private fun fetch() {
         val req = Request.Builder().url("https://api.github.com/repos/$REPO/releases/latest")
-            .header("Accept", "application/vnd.github+json").header("User-Agent", "Prism/${BuildConfig.VERSION_NAME}")
-            // GitHub answers "not modified" when the latest release is the one seen last time (and doesn't count it
-            // against its hourly limit), so asking every hour costs next to nothing.
-            .apply { prefs.getString("etag", null)?.takeIf { _available.value != null || prefs.contains("latest_version") }?.let { header("If-None-Match", it) } }
+            .header("Accept", "application/vnd.github+json").header("User-Agent", USER_AGENT)
+            .apply { prefs.getString("etag", null)?.let { header("If-None-Match", it) } }
             .build()
-        val answer = runCatching { http.newCall(req).execute() }
-        // GitHub's API allows 60 requests an hour per address, and carriers and VPNs share addresses: refused or
-        // unreachable, the release page's own redirect says the same thing with no such limit (1.8.1.1).
-        if (answer.getOrNull()?.let { it.code == 304 || it.isSuccessful } != true) {
-            answer.getOrNull()?.close()
-            if (fetchFromReleasePage()) return
-            answer.exceptionOrNull()?.let { throw it }
-            error(tr(R.string.github_answered, answer.getOrNull()?.code ?: 0))
-        }
-        answer.getOrThrow().use { r ->
-            if (r.code == 304) { prefs.edit().putLong("checked_at", System.currentTimeMillis()).apply(); _available.value = saved(); return }
-            r.header("ETag")?.let { prefs.edit().putString("etag", it).apply() }
+        http.newCall(req).execute().use { r ->
+            when (r.code) {
+                304 -> {
+                    prefs.edit().putLong("checked_at", System.currentTimeMillis()).apply()
+                    _available.value = saved()
+                    return
+                }
+                404 -> { storeRelease(null, null); return }
+                403, 429 -> if (fetchFromReleasePage()) return
+            }
+            if (!r.isSuccessful) error(tr(R.string.github_answered, r.code))
             val json = InnerTube.json.parseToJsonElement(r.body.string())
-            val version = json.str("tag_name")?.removePrefix("v")?.trim() ?: error("GitHub's answer had no version")
-            val apk = json.arr("assets")?.firstOrNull { it.str("name")?.endsWith(".apk", true) == true }?.str("browser_download_url")
-            val url = apk ?: json.str("html_url") ?: "https://github.com/$REPO/releases/latest"
-            prefs.edit().putString("latest_version", version).putString("latest_url", url).putLong("checked_at", System.currentTimeMillis()).apply()
-            _available.value = saved()
+            val apk = json.arr("assets")?.firstOrNull { it.str("name") == APK_NAME }?.str("browser_download_url")
+            storeRelease(releaseUpdate(json.str("tag_name"), apk), r.header("ETag"))
         }
     }
 
-    /** The latest version from where github.com/…/releases/latest redirects to. False when it can't tell. */
+    private fun storeRelease(update: AppUpdate?, etag: String?) {
+        prefs.edit().putString("etag", etag)
+            .putString("latest_version", update?.version).putString("latest_url", update?.url)
+            .putLong("checked_at", System.currentTimeMillis()).apply()
+        _available.value = saved()
+    }
+
+    /** GitHub’s unauthenticated API can rate-limit shared mobile IP addresses. */
     private fun fetchFromReleasePage(): Boolean = runCatching {
-        val req = Request.Builder().url("https://github.com/$REPO/releases/latest").header("User-Agent", "Prism/${BuildConfig.VERSION_NAME}").build()
-        http.newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(req).execute().use { r ->
-            val version = versionFromLatestRedirect(r.header("Location")) ?: return@use false
-            prefs.edit().putString("latest_version", version)
-                .putString("latest_url", "https://github.com/$REPO/releases/download/v$version/Prism.apk")
-                .putLong("checked_at", System.currentTimeMillis()).apply()
-            _available.value = saved()
-            true
-        }
+        val req = Request.Builder().url("$RELEASES/latest").header("User-Agent", USER_AGENT).build()
+        val redirect = http.newBuilder().followRedirects(false).followSslRedirects(false).build().newCall(req)
+            .execute().use { it.header("Location") } ?: return@runCatching false
+        val tag = redirect.removePrefix("$RELEASES/tag/")
+        val update = releaseUpdate(tag, "$RELEASES/download/$tag/$APK_NAME") ?: return@runCatching false
+        val asset = Request.Builder().url(update.url).head().header("User-Agent", USER_AGENT).build()
+        val available = http.newCall(asset).execute().use { it.isSuccessful }
+        if (available) storeRelease(update, null)
+        available
     }.getOrDefault(false)
 
     /** Hides the banner until a version newer than this one comes out. */
@@ -187,18 +172,16 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
             }
             result.exceptionOrNull()?.let { e ->
                 if (!isActive) return@let
-                _progress.value = if (e is SignatureChanged) UpdateProgress.NewSignature(update.version, File(dir, "Prism-${update.version}.apk"))
-                else UpdateProgress.Failed(e.friendlyMessage(tr(R.string.the_update_didn_t_download)))
+                _progress.value = UpdateProgress.Failed(e.friendlyMessage(tr(R.string.the_update_didn_t_download)))
             }
         }
     }
 
     private fun download(update: AppUpdate): File {
         dir.mkdirs()
-        val file = File(dir, "Prism-${update.version}.apk")
-        if (file.exists()) return file
+        val file = File(dir, "Aftertone-${update.version}.apk")
         val part = File(dir, file.name + ".part")
-        val req = Request.Builder().url(update.url).header("User-Agent", "Prism/${BuildConfig.VERSION_NAME}").build()
+        val req = Request.Builder().url(update.url).header("User-Agent", USER_AGENT).build()
         http.newCall(req).execute().use { r ->
             if (!r.isSuccessful) error(tr(R.string.github_answered, r.code))
             val body = r.body
@@ -228,12 +211,12 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     @Suppress("DEPRECATION")
     private fun verify(apk: File) {
         val info = context.packageManager.getPackageArchiveInfo(apk.path, 0) ?: error(tr(R.string.the_downloaded_file_isn_t_an))
-        if (info.packageName != context.packageName) error(tr(R.string.the_download_isn_t_prism))
+        if (info.packageName != context.packageName) error(tr(R.string.aftertone_update_wrong_package))
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else info.versionCode.toLong()
         if (code <= BuildConfig.VERSION_CODE) error(tr(R.string.that_s_not_newer_than_this))
         val theirs = signers(context.packageManager.getPackageArchiveInfo(apk.path, signingFlag()))
         val ours = signers(context.packageManager.getPackageInfo(context.packageName, signingFlag()))
-        if (theirs.isNotEmpty() && ours.isNotEmpty() && theirs != ours) throw SignatureChanged()
+        if (theirs.isEmpty() || ours.isEmpty() || theirs != ours) error(tr(R.string.aftertone_update_wrong_signer))
     }
 
     @Suppress("DEPRECATION")
@@ -243,20 +226,11 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     @Suppress("DEPRECATION")
     private fun signers(info: android.content.pm.PackageInfo?): Set<String> {
         info ?: return emptySet()
-        val sigs = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.let { if (it.hasMultipleSigners()) it.apkContentsSigners else it.signingCertificateHistory }
+        val sigs = if (Build.VERSION.SDK_INT >= 28) info.signingInfo?.apkContentsSigners
             else info.signatures
         val sha = java.security.MessageDigest.getInstance("SHA-256")
         return sigs.orEmpty().map { s -> sha.digest(s.toByteArray()).joinToString("") { "%02x".format(it) } }.toSet()
     }
-
-    /** Copies the downloaded new Prism to [uri] (somewhere that outlives uninstalling this one). */
-    suspend fun saveApk(apk: File, uri: Uri) = kotlinx.coroutines.withContext(Dispatchers.IO) {
-        val out = context.contentResolver.openOutputStream(uri, "wt") ?: error(tr(R.string.couldn_t_open_that_file))
-        out.use { o -> apk.inputStream().use { it.copyTo(o) } }
-    }
-
-    /** Android's "uninstall Prism?" prompt. */
-    fun uninstallIntent(): Intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}"))
 
     /** Android's "install this update?" screen while it waits for the listener (shown again on a tap, #278). */
     @Volatile private var pendingConfirm: Intent? = null
@@ -279,12 +253,12 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
         }
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
-            session.openWrite("Prism.apk", 0, apk.length()).use { out ->
+            session.openWrite(APK_NAME, 0, apk.length()).use { out ->
                 apk.inputStream().use { it.copyTo(out) }
                 session.fsync(out)
             }
             // Named after the APK: that's how Android pairs the two.
-            if (profile != null) session.openWrite("Prism.dm", 0, profile.length()).use { out ->
+            if (profile != null) session.openWrite("Aftertone.dm", 0, profile.length()).use { out ->
                 profile.inputStream().use { it.copyTo(out) }
                 session.fsync(out)
             }
@@ -383,17 +357,22 @@ class UpdateChecker(private val context: Context, private val http: OkHttpClient
     enum class InstallStep { START, WAIT, REOPEN }
 
     companion object {
-        const val REPO = "Yigder/Prism"
+        const val REPO = "ashishgupta1350/Aftertone"
+        const val RELEASES = "https://github.com/$REPO/releases"
+        private const val APK_NAME = "Aftertone.apk"
+        private val USER_AGENT = "Aftertone/${BuildConfig.VERSION_NAME}"
+        private val releaseTag = Regex("v([0-9]+(?:\\.[0-9]+){2,3})")
+
+        internal fun releaseUpdate(tag: String?, url: String?): AppUpdate? {
+            val version = releaseTag.matchEntire(tag.orEmpty())?.groupValues?.get(1) ?: return null
+            val asset = "$RELEASES/download/$tag/$APK_NAME"
+            return AppUpdate(version, asset).takeIf { url == asset }
+        }
 
         /** How long between background checks (#278: was six hours). */
         const val CHECK_EVERY_MS = 3_600_000L
 
         fun dueToCheck(now: Long, checkedAt: Long): Boolean = now - checkedAt !in 0 until CHECK_EVERY_MS
-
-        /** "1.8.1" from a redirect to ".../releases/tag/v1.8.1"; null for anywhere else (no release yet, a sign-in page). */
-        fun versionFromLatestRedirect(location: String?): String? =
-            location?.substringAfter("/releases/tag/", "")?.substringBefore('?')?.removePrefix("v")?.trim()
-                ?.takeIf { it.isNotEmpty() && it.first().isDigit() }
 
         /**
          * A tap on the update while one is under way (#278): downloading, nothing new starts; handed to Android's

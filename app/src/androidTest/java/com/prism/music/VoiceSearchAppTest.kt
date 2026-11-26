@@ -41,6 +41,78 @@ class VoiceSearchAppTest {
         tones.forEach { runCatching { Fixture.context.contentResolver.delete(it, null, null) } }
     }
 
+    @Test fun theCarOffersSearchAndResumesTheCurrentTrackFromHome() {
+        val songs = setUp()
+        val player = Fixture.container.player
+        val main = InstrumentationRegistry.getInstrumentation()
+        main.runOnMainSync {
+            player.playQueue(songs, 1, com.prism.music.playback.QueueSource(com.prism.music.playback.QueueKind.OTHER, LIST))
+        }
+        waitFor(20_000) { player.currentSong.value?.id == songs[1].id && player.isPlaying.value }
+        val car = connect()
+        assertTrue("the browser does not advertise search", car.extras?.getBoolean("android.media.browse.SEARCH_SUPPORTED") == true)
+        val loaded = LinkedBlockingQueue<List<MediaBrowser.MediaItem>>()
+        main.runOnMainSync {
+            car.subscribe(com.prism.music.playback.MediaTree.HOME, object : MediaBrowser.SubscriptionCallback() {
+                override fun onChildrenLoaded(parentId: String, children: MutableList<MediaBrowser.MediaItem>) {
+                    loaded.offer(children)
+                }
+            })
+        }
+        val home = loaded.poll(15, TimeUnit.SECONDS).orEmpty()
+        val resume = home.firstOrNull { it.mediaId == com.prism.music.playback.MediaTree.RESUME }
+        assertEquals(songs[1].title, resume?.description?.title?.toString())
+        assertTrue(home.any { it.mediaId == com.prism.music.playback.MediaTree.DOWNLOADS })
+        val controller = MediaController(Fixture.context, car.sessionToken)
+        controller.transportControls.pause()
+        waitFor(10_000) { !player.isPlaying.value }
+        main.runOnMainSync { player.seekTo(12_000) }
+        controller.transportControls.playFromMediaId(checkNotNull(resume).mediaId, null)
+        waitFor(10_000) { player.isPlaying.value }
+        var positionMs = 0L
+        main.runOnMainSync { positionMs = checkNotNull(player.player).currentPosition }
+        assertEquals(songs[1].id, player.currentSong.value?.id)
+        assertTrue("resumed position was $positionMs", positionMs >= 12_000)
+    }
+
+    @Test fun nextFromOneSongRequestsRadioWithAutoplayOffAndRepeatAll() {
+        val songs = setUp(toneSeconds = 90)
+        val c = Fixture.container
+        val player = c.player
+        c.settings.setAutoplay(false)
+        c.settings.setAutoplaySource(com.prism.music.data.prefs.AutoplaySource.YOURS)
+        waitFor(10_000) { !c.settings.current.autoplay && c.settings.current.autoplaySource == com.prism.music.data.prefs.AutoplaySource.YOURS }
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            player.playSingle(songs[0])
+            player.afterPending {
+                checkNotNull(player.player).repeatMode = androidx.media3.common.Player.REPEAT_MODE_ALL
+                player.next()
+            }
+        }
+        waitFor(20_000) { player.currentSong.value?.id == songs[1].id }
+    }
+
+    @Test fun oneSongQueuesSeveralRelatedTracksBeforeNextWithAutoplayOff() {
+        val songs = setUp(toneSeconds = 90, names = listOf("one", "two", "three", "four"))
+        val c = Fixture.container
+        val player = c.player
+        c.settings.setAutoplay(false)
+        c.settings.setAutoplaySource(com.prism.music.data.prefs.AutoplaySource.YOURS)
+        waitFor(10_000) { !c.settings.current.autoplay && c.settings.current.autoplaySource == com.prism.music.data.prefs.AutoplaySource.YOURS }
+        val main = InstrumentationRegistry.getInstrumentation()
+        main.runOnMainSync { player.playSingle(songs.first()) }
+        waitFor(20_000) { player.currentSong.value?.id == songs.first().id && player.upNext.value.size == 3 }
+        var selectedId = ""
+        main.runOnMainSync {
+            val upcoming = player.upNext.value
+            assertEquals(songs.drop(1).map { it.id }.toSet(), upcoming.map { player.queue.value[it].song.id }.toSet())
+            val selected = upcoming[1]
+            selectedId = player.queue.value[selected].song.id
+            player.skipTo(selected)
+        }
+        waitFor(10_000) { player.currentSong.value?.id == selectedId }
+    }
+
     @Test fun theCarsVoiceRequestPlaysYourPlaylistByName() {
         val songs = setUp()
         val controller = MediaController(Fixture.context, connect().sessionToken)
@@ -112,17 +184,16 @@ class VoiceSearchAppTest {
         assertEquals(LIST, Fixture.container.queue.source.value.title)
     }
 
-    /** Two silent songs on the phone, in a Prism playlist; Prism open. */
-    private fun setUp(): List<Song> {
+    /** Silent songs on the phone, in a Prism playlist; Prism open. */
+    private fun setUp(toneSeconds: Int = 60, names: List<String> = listOf("one", "two")): List<Song> {
         Fixture.ready()
         val perm = if (android.os.Build.VERSION.SDK_INT >= 33) android.Manifest.permission.READ_MEDIA_AUDIO else android.Manifest.permission.READ_EXTERNAL_STORAGE
         InstrumentationRegistry.getInstrumentation().uiAutomation.grantRuntimePermission(Fixture.context.packageName, perm)
-        tones += Fixture.tone("Prism voice tone one", 60)
-        tones += Fixture.tone("Prism voice tone two", 60)
+        for (name in names) tones += Fixture.tone("Prism voice tone $name", toneSeconds)
         Fixture.launch()
         val local = Fixture.container.localMusic
         runBlocking { local.scan() }
-        val songs = listOf("one", "two").map { w -> local.tracks.value.first { it.song.title == "Prism voice tone $w" }.song }
+        val songs = names.map { name -> local.tracks.value.first { it.song.title == "Prism voice tone $name" }.song }
         Fixture.prismPlaylist(LIST, songs)
         return songs
     }

@@ -885,18 +885,12 @@ internal fun UpdateBanner(inSettings: Boolean = false) {
     val progress by c.updates.progress.collectAsState()
     LaunchedEffect(Unit) { c.updates.check() }
     val u = update ?: return
-    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     // Back from "Install unknown apps": carry on straight away if it was allowed.
     val allow = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
         if (c.updates.canInstall()) c.updates.install(u)
     }
     LaunchedEffect(progress) {
         if (progress is com.prism.music.data.UpdateProgress.NeedsPermission) runCatching { allow.launch(c.updates.permissionIntent()) }
-    }
-    var moving by remember { mutableStateOf(false) }
-    (progress as? com.prism.music.data.UpdateProgress.NewSignature)?.let { p ->
-        LaunchedEffect(p) { moving = true }
-        if (moving) com.prism.music.ui.screens.NewSignatureSheet(p.version, p.apk) { moving = false }
     }
     val busy = progress is com.prism.music.data.UpdateProgress.Downloading || progress is com.prism.music.data.UpdateProgress.Installing
     val ui = com.prism.music.ui.theme.LocalUi.current
@@ -905,12 +899,11 @@ internal fun UpdateBanner(inSettings: Boolean = false) {
     val ink = scheme.onSurface
     val (title, detail) = when (val p = progress) {
         is com.prism.music.data.UpdateProgress.Downloading ->
-            tr(R.string.downloading_prism, u.version) to (p.fraction?.let { "${(it * 100).toInt()}%" } ?: tr(R.string.starting_2))
-        com.prism.music.data.UpdateProgress.Installing -> tr(R.string.installing_prism, u.version) to tr(R.string.confirm_in_android_s_installer)
+            tr(R.string.aftertone_update_downloading, u.version) to (p.fraction?.let { "${(it * 100).toInt()}%" } ?: tr(R.string.starting_2))
+        com.prism.music.data.UpdateProgress.Installing -> tr(R.string.aftertone_update_installing, u.version) to tr(R.string.confirm_in_android_s_installer)
         is com.prism.music.data.UpdateProgress.Failed -> tr(R.string.update_didn_t_finish) to tr(R.string.tap_to_try_again_2, p.message)
-        com.prism.music.data.UpdateProgress.NeedsPermission -> tr(R.string.allow_prism_to_install_updates) to tr(R.string.turn_on_allow_from_this_source)
-        com.prism.music.data.UpdateProgress.Idle -> tr(R.string.prism_is_available, u.version) to tr(R.string.tap_to_update)
-        is com.prism.music.data.UpdateProgress.NewSignature -> tr(R.string.prism_needs_a_reinstall, u.version) to tr(R.string.tap_to_move_over_your_things)
+        com.prism.music.data.UpdateProgress.NeedsPermission -> tr(R.string.aftertone_update_permission) to tr(R.string.turn_on_allow_from_this_source)
+        com.prism.music.data.UpdateProgress.Idle -> tr(R.string.aftertone_update_available, u.version) to tr(R.string.tap_to_update)
     }
     Column(
         Modifier.padding(start = 16.dp, end = 16.dp, top = if (inSettings) 4.dp else ui.gap(14.dp), bottom = if (inSettings) 8.dp else 0.dp)
@@ -918,9 +911,7 @@ internal fun UpdateBanner(inSettings: Boolean = false) {
             // While Android's installer waits, a tap brings its screen back (#278); nothing starts a second update.
             .clickable(enabled = progress !is com.prism.music.data.UpdateProgress.Downloading) {
                 when {
-                    !u.isApk -> runCatching { uri.openUri(u.url) }
                     progress is com.prism.music.data.UpdateProgress.NeedsPermission -> runCatching { allow.launch(c.updates.permissionIntent()) }
-                    progress is com.prism.music.data.UpdateProgress.NewSignature -> moving = true
                     else -> c.updates.install(u)
                 }
             },

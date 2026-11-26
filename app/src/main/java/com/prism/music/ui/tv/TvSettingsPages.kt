@@ -147,7 +147,7 @@ fun TvSettingsPlace(nav: TvNav) {
         ),
         TvSettingGroup(tr(R.string.about_3), PrismIcons.Info, emptyList()) to listOf(
             TvSettingRow(TvSetting(tr(R.string.tv_version, BuildConfig.VERSION_NAME)), TvSettingAction.Run {}),
-            TvSettingRow(TvSetting(tr(R.string.check_for_updates)), TvSettingAction.Run { scope.launch { say(runCatching { c.updates.checkNow()?.let { tr(R.string.tv_update_ready, it) } ?: tr(R.string.you_re_up_to_date) }.getOrElse { it.message ?: tr(R.string.you_re_up_to_date) }) } }),
+            TvSettingRow(TvSetting(tr(R.string.check_for_updates)), TvSettingAction.Run { scope.launch { say(runCatching { c.updates.checkNow()?.let { tr(R.string.aftertone_update_available, it) } ?: tr(R.string.you_re_up_to_date) }.getOrElse { it.message ?: tr(R.string.you_re_up_to_date) }) } }),
         ),
     )
     val rows = groups.getOrNull(group)?.second.orEmpty()

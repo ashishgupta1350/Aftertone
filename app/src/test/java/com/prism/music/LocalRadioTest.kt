@@ -86,6 +86,18 @@ class LocalRadioTest {
     }
 
     @Test
+    fun aStandaloneSongDoesNotQueueAnotherUploadOfItself() {
+        val qaafirana = Song("studio", "Qaafirana", listOf(ArtistRef("Arijit Singh")))
+        val video = Song("video", "Qaafirana | Kedarnath | Arijit Singh & Nikhita Gandhi", listOf(ArtistRef("Zee Music Company")), isVideo = true)
+        val related = Song("related", "Jaan Nisaar", listOf(ArtistRef("Arijit Singh")))
+        val repeats = com.prism.music.data.foryou.RadioTopUp::repeatsSeed
+        assertTrue(repeats(qaafirana, qaafirana))
+        assertTrue(repeats(qaafirana, video))
+        assertTrue(repeats(video, qaafirana))
+        assertFalse(repeats(qaafirana, related))
+    }
+
+    @Test
     fun newSectionsGoInOnceAfterMadeForYou() {
         val layout = listOf(HomeSectionConfig(HomeSections.QUICK_PICKS, "Quick picks"), HomeSectionConfig(HomeSections.MADE_FOR_YOU, "Made for you"), HomeSectionConfig("x", "X"))
         val add = listOf(HomeSectionConfig(HomeSections.ON_REPEAT, "On repeat"), HomeSectionConfig(HomeSections.YOUR_MIXES, "Mixes from your music"))

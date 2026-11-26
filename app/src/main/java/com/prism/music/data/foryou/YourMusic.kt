@@ -74,25 +74,28 @@ class YourMusic(private val c: AppContainer) {
     private fun ok(s: Song) = !s.isEpisode && !s.isLive && !c.library.isDisliked(s.id) && !c.exclusions.blocks(s) && !c.exclusions.isSongExcluded(s.id)
 
     /**
-     * Prism's radio: up to [count] songs from your own music to follow [seedIds] (the newest last), none of [inQueue],
+     * Prism's radio: up to [count] songs from your own music to follow [seeds] (the newest last), none of [inQueue],
      * nothing played in the last two hours. [offlineOnly]: only songs that play without a connection.
      */
-    suspend fun radio(seedIds: List<String>, inQueue: Set<String>, count: Int, offlineOnly: Boolean): List<LocalRadio.Pick> {
-        val s = snapshot()
-        val seeds = seedIds.mapNotNull { id -> s.songs[id] ?: c.db.songs().get(id)?.toSong() }
+    suspend fun radio(seeds: List<Song>, inQueue: Set<String>, count: Int, offlineOnly: Boolean): List<LocalRadio.Pick> {
         if (seeds.isEmpty()) return emptyList()
+        val s = snapshot()
+        // Home may have built the taste model before the latest scan or library update.
+        val local = c.localMusic.tracks.value.map { it.song }
+        val candidates = (local + c.downloads.completedSongs() + c.library.liked.value + s.songs.values.filterNot { it.isLocal })
+            .distinctBy { it.id }
         val now = System.currentTimeMillis()
         val recent = s.events.filter { now - it.timestamp < 2 * HOUR }.map { it.songId }.toSet()
         val pool = LocalRadio.Pool(
             // Not clips under a minute (an album's intro, a skit, a sound file on the phone): they'd break the run of songs.
-            songs = s.songs.values.filter { ok(it) && !it.isVideo && (it.durationSec == 0 || it.durationSec >= 60) && (!offlineOnly || c.availableOffline(it.id)) },
+            songs = candidates.filter { ok(it) && !it.isVideo && (it.durationSec == 0 || it.durationSec >= 60) && (!offlineOnly || c.availableOffline(it.id)) },
             coListen = s.coListen,
             affinity = { s.model.score(it) * rest(s, it.id) },
             genreOf = { s.genres[it] },
             keyFit = { a, b -> keyFit(a, b) },
         )
         val day = LocalDate.now().toString()
-        return LocalRadio.pick(seeds, pool, inQueue + recent, count) { id -> 0.9 + 0.2 * (((id + day + seedIds.last()).hashCode().toLong() and 0xffff) / 65535.0) }
+        return LocalRadio.pick(seeds, pool, inQueue + recent, count) { id -> 0.9 + 0.2 * (((id + day + seeds.last().id).hashCode().toLong() and 0xffff) / 65535.0) }
     }
 
     private fun keyFit(a: String, b: String): Double {

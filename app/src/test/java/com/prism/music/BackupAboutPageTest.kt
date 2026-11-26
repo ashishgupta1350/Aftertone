@@ -24,12 +24,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.prism.music.data.BackupPart
+import com.prism.music.data.CloudBackup
 import com.prism.music.data.prefs.AppSettings
 import com.prism.music.data.prefs.ThemeMode
 import com.prism.music.ui.LocalNavigator
 import com.prism.music.ui.Navigator
 import com.prism.music.ui.Routes
-import com.prism.music.ui.screens.SOURCE_URL
 import com.prism.music.ui.screens.SettingsIndex
 import com.prism.music.ui.screens.settings.BACKUP_ABOUT_FOOT
 import com.prism.music.ui.screens.settings.BACKUP_ABOUT_UPDATE
@@ -87,21 +87,30 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     private fun t(id: Int) = tr(id)
     private val app get() = RuntimeEnvironment.getApplication()
 
-    /** The tests that start with a newer Prism already known of (as after Home's own check). */
+    private val backupRows get() = 2 + (if (CloudBackup.available) 1 else 0) +
+        (if (BuildConfig.AFTERTONE_SERVER.isNotBlank()) 2 else 0)
+
+    /** The tests that start with an Aftertone release already cached. */
     private val withUpdate = setOf("anUpdateIsOfferedUnderItsRow", "drawnWithEverything", "atLargeTextNothingIsCutOff")
     private val newer = "99.0.0"
 
     /** Before the container is made (it reads the update it knows of once): GitHub was asked just now, no crash is kept. */
     @get:Rule val offline = object : TestWatcher() {
         override fun starting(description: Description) {
-            val prefs = app.getSharedPreferences("updates", 0).edit().clear().putLong("checked_at", System.currentTimeMillis())
-            if (description.methodName in withUpdate) prefs.putString("latest_version", newer).putString("latest_url", "https://example.invalid/Prism.apk")
+            val prefs = app.getSharedPreferences("aftertone_updates", 0).edit().clear().putLong("checked_at", System.currentTimeMillis())
+            if (description.methodName in withUpdate) prefs.putString("latest_version", newer)
+                .putString("latest_url", "https://github.com/ashishgupta1350/Aftertone/releases/download/v$newer/Aftertone.apk")
             prefs.commit()
+            if (description.methodName == "fourGroupsWithinTheBudgets") {
+                app.getSharedPreferences("updates", 0).edit().putString("latest_version", newer)
+                    .putString("latest_url", "https://github.com/Yigder/Prism/releases/download/v$newer/Prism.apk").commit()
+            }
             crashes.deleteRecursively()
         }
 
         override fun finished(description: Description) {
             app.getSharedPreferences("updates", 0).edit().clear().commit()
+            app.getSharedPreferences("aftertone_updates", 0).edit().clear().commit()
             crashes.deleteRecursively()
         }
     }
@@ -127,7 +136,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     private val shareLog = t(R.string.share_diagnostics)
     private val clearLog = t(R.string.clear_diagnostics)
     private val unofficial = t(R.string.unofficial_not_affiliated_with_google_or)
-    private val installed = tr(R.string.prism, BuildConfig.VERSION_NAME)
+    private val installed = tr(R.string.aftertone_installed_version, BuildConfig.VERSION_NAME)
 
     /** Debug builds (as the tests are) also have the design gallery's row. */
     private val aboutRows = if (BuildConfig.DEBUG) 4 else 3
@@ -169,7 +178,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         show()
         assertBudgets("defaults")
         assertEquals(listOf(backupGroup, updatesGroup, aboutGroup, diagnosticsGroup), groupTitles())
-        assertEquals(listOf(2, 1, aboutRows, 1), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 1), groupSizes())
         assertEquals("nothing differs from how Prism comes", 0, changedRows())
         // No group is named as the page, and none as one of its own rows.
         assertTrue(groupTitles().none { it == SettingsPageId.BACKUP_ABOUT.title })
@@ -234,7 +243,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         assertTrue(hasRow(shareLog) && hasRow(clearLog))
         assertEquals(SettingsTags.ROW_LINK, typeOf(shareLog))
         assertEquals(SettingsTags.ROW_LINK, typeOf(clearLog))
-        assertEquals(listOf(2, 1, aboutRows, 3), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 3), groupSizes())
         assertBudgets("diagnostics on")
         assertEquals(1, changedRows())
 
@@ -243,7 +252,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         assertEquals(listOf("$diagnostics: ${t(R.string.on_2)} → ${t(R.string.off)}"), lines)
         until("the reset") { !it.audioDiagnostics }
         assertEquals(0, changedRows())
-        assertEquals(listOf(2, 1, aboutRows, 1), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 1), groupSizes())
     }
 
     /** Clearing starts the log again and says so; nothing else on the page changes. */
@@ -262,7 +271,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         var shared = 0
         showContent(share = { shared++ })
         assertEquals("drawing the page shares nothing", 0, shared)
-        assertEquals(listOf(2, 1, aboutRows, 3), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 3), groupSizes())
         val at = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(crashedAt))
         assertEquals(tr(R.string.tap_to_share_its_details, at), valueOf(lastCrash))
         tap(lastCrash)
@@ -270,7 +279,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         // With the log on as well: the group's fullest state, five rows.
         tap(diagnostics)
         until("audio_diagnostics") { it.audioDiagnostics }
-        assertEquals(listOf(2, 1, aboutRows, 5), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 5), groupSizes())
         assertBudgets("a crash kept, diagnostics on")
         tap(shareLog)
         assertEquals(2, shared)
@@ -278,7 +287,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         tap(forgetCrashes)
         assertFalse(file.exists())
         assertFalse(hasRow(lastCrash) || hasRow(forgetCrashes))
-        assertEquals(listOf(2, 1, aboutRows, 3), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 3), groupSizes())
         assertEquals(2, shared)
     }
 
@@ -324,10 +333,10 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
 
     @Test fun theUpdateRowsValueLine() {
         assertEquals(installed, updateCheckValue(null, null))
-        assertEquals(tr(R.string.prism_is_available, "2.0"), updateCheckValue(null, "2.0"))
+        assertEquals(tr(R.string.aftertone_update_available, "2.0"), updateCheckValue(null, "2.0"))
         assertEquals(t(R.string.asking_github), updateCheckValue(UpdateCheck.Asking, "2.0"))
         assertEquals(t(R.string.you_re_up_to_date), updateCheckValue(UpdateCheck.Current, null))
-        assertEquals(tr(R.string.prism_is_out_tap_below_to, "2.0"), updateCheckValue(UpdateCheck.Newer("2.0"), "2.0"))
+        assertEquals(tr(R.string.aftertone_update_ready, "2.0"), updateCheckValue(UpdateCheck.Newer("2.0"), "2.0"))
         assertEquals(t(R.string.couldn_t_reach_github_try_again), updateCheckValue(UpdateCheck.Unreachable, null))
     }
 
@@ -349,7 +358,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
 
         answer = { "9.9.9" }
         tap(check)
-        compose.waitUntil(5_000) { valueOf(check) == tr(R.string.prism_is_out_tap_below_to, "9.9.9") }
+        compose.waitUntil(5_000) { valueOf(check) == tr(R.string.aftertone_update_ready, "9.9.9") }
 
         answer = { throw java.io.IOException("offline") }
         tap(check)
@@ -362,7 +371,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     @Test fun anUpdateIsOfferedUnderItsRow() {
         show()
         assertEquals(newer, container.updates.available.value?.version)
-        val offer = tr(R.string.prism_is_available, newer)
+        val offer = tr(R.string.aftertone_update_available, newer)
         assertEquals(offer, valueOf(check))
         val card = compose.onNodeWithTag(BACKUP_ABOUT_UPDATE).fetchSemanticsNode()
         assertEquals("the card's own title too", 2, shown(offer))
@@ -374,19 +383,19 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
         val drawn = compose.onNode(hasText(t(R.string.tap_to_update)) and hasAnyAncestor(hasTestTag(BACKUP_ABOUT_UPDATE))).fetchSemanticsNode()
         assertTrue("inside the page's gutters", drawn.boundsInRoot.left >= cards[1].boundsInRoot.left && drawn.boundsInRoot.right <= cards[1].boundsInRoot.right)
         assertBudgets("an update offered")
-        assertEquals(listOf(2, 1, aboutRows, 1), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 1), groupSizes())
     }
 
     // ------------------------------------------------------------------ About
 
-    @Test fun aboutsLinksGoWhereTheyDid() {
+    @Test fun aboutLinksToAftertoneOnGitHub() {
         val tours = java.util.concurrent.atomic.AtomicInteger()
         val scope = CoroutineScope(Dispatchers.Unconfined)
         scope.launch { container.tourRequests.collect { tours.incrementAndGet() } }
         try {
             showContent()
             tap(source)
-            assertEquals(listOf(SOURCE_URL), opened)
+            assertEquals(listOf("https://github.com/ashishgupta1350/Aftertone"), opened)
             tap(tour)
             assertEquals(1, tours.get())
             tap(licenses)
@@ -439,7 +448,7 @@ class BackupAboutPageTest : ListeningPageHarness(SettingsPageId.BACKUP_ABOUT) {
     @Test fun atLargeTextNothingIsCutOff() {
         keepACrash()
         show(fontScale = 1.5f, over = everything)
-        assertEquals(listOf(2, 1, aboutRows, 5), groupSizes())
+        assertEquals(listOf(backupRows, 1, aboutRows, 5), groupSizes())
         assertBudgets("large text")
         assertNoTextCutOff("font scale 1.5")
     }
